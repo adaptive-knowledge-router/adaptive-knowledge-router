@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pkl
+*.bin
+*.jsonl
+*.json
+router_model/
+notes.MD
