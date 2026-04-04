@@ -4,8 +4,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from kg_service.app.cypher_templates import *
-from kg_service.app.neo4j_client import DatabaseQueryError, run_query
+from app.cypher_templates import *
+from app.neo4j_client import DatabaseQueryError, run_query
 
 VALID_RELATION_FILTER_MODES = {
     "author_to_papers",

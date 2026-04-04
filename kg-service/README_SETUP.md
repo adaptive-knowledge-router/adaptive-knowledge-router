@@ -69,17 +69,23 @@ curl "http://127.0.0.1:8000/kg/query/entity?question=What%20is%20paper%200704.00
 
 pip install -r requirements.txt
 
-Start Neo4j
+1. Start Neo4j
 
-Make sure Neo4j is running with the correct credentials.
+    Make sure Neo4j is running with the correct credentials.
 
-Default expected values:
+    Default expected values:
 
-URI: bolt://localhost:7687
-User: neo4j
-Password: password
+    URI: bolt://localhost:7687
+    User: neo4j
+    Password: password
+2. Build Sample dataset or paste the sample - into data/processed using python scripts/build_subset.py
 
-Create indexes and constraints
+3. Load dataset into Neo4j
+```bash 
+python scripts/load_arxiv_to_neo4j.py
+```
+
+4. Create indexes and constraints
 
 Run this after loading data into Neo4j:
 
@@ -87,7 +93,7 @@ Run this after loading data into Neo4j:
 python kg_service/setup_indexes.py
 ```
 
-Start service 
+5. Start service 
 ```bash
 uvicorn kg_service.app.main:app --reload
 ```
@@ -95,6 +101,11 @@ uvicorn kg_service.app.main:app --reload
 Open swagger 
 ```bash
 http://127.0.0.1:8000/docs
+
+```
+
+```md
+> Note: The dataset is not committed to the repository because it is too large. Each teammate must generate the sample dataset locally and then load it into Neo4j before running the service.
 ```
 ## stratergy overview 
 

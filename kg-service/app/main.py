@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from kg_service.app.extract_params import extract_all
-from kg_service.app.neo4j_client import DatabaseQueryError, verify_connection
-from kg_service.app.service import entity_lookup, relation_filter, multi_hop
+from app.extract_params import extract_all
+from app.neo4j_client import DatabaseQueryError, verify_connection
+from app.service import entity_lookup, relation_filter, multi_hop
 
 app = FastAPI(title="KG Service", version="1.2.0")
 
