@@ -25,6 +25,7 @@ VALID_MULTI_HOP_MODES_BY_HOPS = {
         "author_to_same_category_papers",
         "category_to_papers_by_authors",
         "paper_to_authors_in_same_categories",
+        "co_authors_in_category",
     },
     4: {
         "author_to_related_authors_via_shared_categories",
@@ -45,6 +46,16 @@ VALID_MULTI_HOP_MODES_BY_HOPS = {
 
 def _http_400(message: str) -> None:
     raise HTTPException(status_code=400, detail=message)
+
+
+def _resolve_paper_id(paper_id: str | None, title: str | None) -> str | None:
+    if paper_id:
+        return paper_id
+    if title:
+        results = _safe_run(ENTITY_LOOKUP_PAPER_BY_TITLE, {"title": title})
+        if results:
+            return results[0].get("paper_id")
+    return None
 
 
 
@@ -160,6 +171,7 @@ def relation_filter(
     author_name: str | None = None,
     category_name: str | None = None,
     paper_id: str | None = None,
+    title: str | None = None,
     has_doi: bool | None = None,
     has_journal_ref: bool | None = None,
     submitter: str | None = None,
@@ -221,8 +233,9 @@ def relation_filter(
         return format_response("relation_filter", results, {"mode": mode, **base_params}, total_count)
 
     if mode == "paper_to_authors":
+        paper_id = _resolve_paper_id(paper_id, title)
         if not paper_id:
-            _http_400("paper_to_authors requires paper_id")
+            _http_400("paper_to_authors requires paper_id or title")
         params = {"paper_id": paper_id}
         if count_only:
             total_count = get_total_count(RELATION_FILTER_PAPER_TO_AUTHORS_COUNT, params)
@@ -232,8 +245,9 @@ def relation_filter(
         return format_response("relation_filter", results, {"mode": mode, **params}, total_count)
 
     if mode == "paper_to_categories":
+        paper_id = _resolve_paper_id(paper_id, title)
         if not paper_id:
-            _http_400("paper_to_categories requires paper_id")
+            _http_400("paper_to_categories requires paper_id or title")
         params = {"paper_id": paper_id}
         if count_only:
             total_count = get_total_count(RELATION_FILTER_PAPER_TO_CATEGORIES_COUNT, params)
@@ -268,6 +282,7 @@ def multi_hop(
     author_name: str | None = None,
     category_name: str | None = None,
     paper_id: str | None = None,
+    title: str | None = None,
     author1: str | None = None,
     author2: str | None = None,
     explain_path: bool = False,
@@ -320,8 +335,9 @@ def multi_hop(
         return format_response("multi_hop", results, {"hops": 2, "mode": mode, **params}, total_count)
 
     if hops == 2 and mode == "paper_to_other_papers_by_same_authors":
+        paper_id = _resolve_paper_id(paper_id, title)
         if not paper_id:
-            _http_400("paper_to_other_papers_by_same_authors requires paper_id")
+            _http_400("paper_to_other_papers_by_same_authors requires paper_id or title")
         params = {"paper_id": paper_id}
         if count_only:
             total_count = get_total_count(MULTI_HOP_2_PAPER_TO_OTHER_PAPERS_BY_SAME_AUTHORS_COUNT, params)
@@ -329,6 +345,19 @@ def multi_hop(
         results = _safe_run(MULTI_HOP_2_PAPER_TO_OTHER_PAPERS_BY_SAME_AUTHORS, params)
         total_count = get_total_count(MULTI_HOP_2_PAPER_TO_OTHER_PAPERS_BY_SAME_AUTHORS_COUNT, params)
         return format_response("multi_hop", results, {"hops": 2, "mode": mode, **params}, total_count)
+
+    if hops == 3 and mode == "co_authors_in_category":
+        if not author_name:
+            _http_400("co_authors_in_category requires author_name")
+        if not category_name:
+            _http_400("co_authors_in_category requires category_name")
+        params = {"author_name": author_name, "category_name": category_name}
+        if count_only:
+            total_count = get_total_count(MULTI_HOP_3_CO_AUTHORS_IN_CATEGORY_COUNT, params)
+            return format_response("multi_hop", [], {"hops": 3, "mode": mode, **params}, total_count)
+        results = _safe_run(MULTI_HOP_3_CO_AUTHORS_IN_CATEGORY, params)
+        total_count = get_total_count(MULTI_HOP_3_CO_AUTHORS_IN_CATEGORY_COUNT, params)
+        return format_response("multi_hop", results, {"hops": 3, "mode": mode, **params}, total_count)
 
     if hops == 3 and mode == "author_to_same_category_papers":
         if not author_name:
@@ -353,8 +382,9 @@ def multi_hop(
         return format_response("multi_hop", results, {"hops": 3, "mode": mode, **params}, total_count)
 
     if hops == 3 and mode == "paper_to_authors_in_same_categories":
+        paper_id = _resolve_paper_id(paper_id, title)
         if not paper_id:
-            _http_400("paper_to_authors_in_same_categories requires paper_id")
+            _http_400("paper_to_authors_in_same_categories requires paper_id or title")
         params = {"paper_id": paper_id}
         if count_only:
             total_count = get_total_count(MULTI_HOP_3_PAPER_TO_AUTHORS_IN_SAME_CATEGORIES_COUNT, params)
@@ -385,8 +415,9 @@ def multi_hop(
         total_count = get_total_count(MULTI_HOP_4_CATEGORY_TO_RELATED_CATEGORIES_VIA_AUTHORS_COUNT, params)
         return format_response("multi_hop", results, {"hops": 4, "mode": mode, **params}, total_count)
 
+    paper_id = _resolve_paper_id(paper_id, title)
     if not paper_id:
-        _http_400("paper_to_related_papers_via_authors_and_categories requires paper_id")
+        _http_400("paper_to_related_papers_via_authors_and_categories requires paper_id or title")
     params = {"paper_id": paper_id}
     if count_only:
         total_count = get_total_count(MULTI_HOP_4_PAPER_TO_RELATED_PAPERS_VIA_AUTHORS_AND_CATEGORIES_COUNT, params)

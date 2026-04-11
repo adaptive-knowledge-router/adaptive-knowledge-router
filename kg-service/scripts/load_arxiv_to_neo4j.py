@@ -1,12 +1,13 @@
 import json
+import os
 from pathlib import Path
 from neo4j import GraphDatabase
 
-URI = "bolt://localhost:7687"
-USER = "neo4j"
-PASSWORD = "password"
+URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+USER = os.getenv("NEO4J_USER", "neo4j")
+PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 
-DATA_PATH = Path("kg_service/data/processed/arxiv_subset.jsonl")
+DATA_PATH = Path(os.getenv("DATA_PATH", "data/processed/arxiv_subset.jsonl"))
 
 driver = GraphDatabase.driver(URI, auth=(USER, PASSWORD))
 
@@ -14,7 +15,7 @@ driver = GraphDatabase.driver(URI, auth=(USER, PASSWORD))
 def clean_text(value) -> str:
     if value is None:
         return ""
-    return str(value).strip()
+    return " ".join(str(value).split())
 
 
 def parse_authors(authors_str: str) -> list[str]:

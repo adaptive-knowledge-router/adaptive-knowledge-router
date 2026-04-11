@@ -8,18 +8,13 @@ from app.hybrid import HybridRetriever
 
 app = FastAPI(title="RAG Service", version="1.0.0")
 
-# DEBUG / LOCAL TESTING MODE:
-# - dense retrieval uses a smaller model
-# - only first 200 docs are loaded for faster local testing
-# For full production mode:
-#   model_name="BAAI/bge-large-en"
-#   max_docs=None
+# Using bge-small-en-v1.5 (smaller, faster). Upgrade to BAAI/bge-large-en for higher accuracy.
 
 bm25_retriever = BM25Retriever()
 
 dense_retriever = DenseRetriever(
     model_name="BAAI/bge-small-en-v1.5",
-    max_docs=200
+    max_docs=None
 )
 
 hybrid_retriever = HybridRetriever(
@@ -27,7 +22,7 @@ hybrid_retriever = HybridRetriever(
     dense_top_k=10,
     dense_model_name="BAAI/bge-small-en-v1.5",
     reranker_model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
-    max_docs=200
+    max_docs=None
 )
 
 
@@ -35,8 +30,8 @@ hybrid_retriever = HybridRetriever(
 def root():
     return {
         "message": "RAG service is running",
-        "mode": "debug",
-        "notes": "Using BAAI/bge-small-en-v1.5 and max_docs=200 for local testing",
+        "model": "BAAI/bge-small-en-v1.5",
+        "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
         "available_endpoints": [
             "/rag/sparse",
             "/rag/dense",

@@ -117,6 +117,7 @@ VALID_MULTIHOP_MODES = {
     "author_to_same_category_papers",
     "category_to_papers_by_authors",
     "paper_to_authors_in_same_categories",
+    "co_authors_in_category",
     "author_to_related_authors_via_shared_categories",
     "category_to_related_categories_via_authors",
     "paper_to_related_papers_via_authors_and_categories",
@@ -194,6 +195,28 @@ def _route_question(question: str, count_only: bool = False) -> dict:
             }
             return result
 
+    # Discard LLM multi_hop mode if the required anchor entity is missing
+    _llm_mode = extracted["mode"]
+    if _llm_mode in VALID_MULTIHOP_MODES:
+        needs_author = _llm_mode in {
+            "author_to_categories", "author_to_same_category_papers",
+            "author_to_related_authors_via_shared_categories",
+        }
+        needs_paper = _llm_mode in {
+            "paper_to_other_papers_by_same_authors", "paper_to_authors_in_same_categories",
+            "paper_to_related_papers_via_authors_and_categories",
+        }
+        needs_category = _llm_mode in {
+            "category_to_authors", "category_to_papers_by_authors",
+            "category_to_related_categories_via_authors",
+        }
+        if needs_author and not extracted["author_name"]:
+            extracted["mode"] = None
+        elif needs_paper and not extracted["paper_id"] and not extracted["title"]:
+            extracted["mode"] = None
+        elif needs_category and not extracted["category_name"]:
+            extracted["mode"] = None
+
     if extracted["hops"] in {2, 3, 4} or extracted["mode"] in VALID_MULTIHOP_MODES:
         hops = _derive_hops_from_mode(extracted["mode"], extracted["hops"])
         mode = extracted["mode"]
@@ -222,7 +245,7 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 mode = "author_to_categories"
                 hops = 2
 
-            elif extracted["paper_id"] and (
+            elif (extracted["paper_id"] or extracted["title"]) and (
                 "papers by same author" in lowered
                 or "other papers by same author" in lowered
                 or "same author as paper" in lowered
@@ -231,6 +254,8 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 or "written by the same author as" in lowered
                 or "which papers are written by the same author as paper" in lowered
                 or "which papers are by the same author as paper" in lowered
+                or "co-authors of" in lowered
+                or "what other papers" in lowered
             ):
                 mode = "paper_to_other_papers_by_same_authors"
                 hops = 2
@@ -252,7 +277,7 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 mode = "category_to_papers_by_authors"
                 hops = 3
 
-            elif extracted["paper_id"] and (
+            elif (extracted["paper_id"] or extracted["title"]) and (
                 "authors in same categories" in lowered
                 or "authors connected to the same categories as paper" in lowered
                 or "same categories" in lowered
@@ -280,7 +305,7 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 mode = "category_to_related_categories_via_authors"
                 hops = 4
 
-            elif extracted["paper_id"] and (
+            elif (extracted["paper_id"] or extracted["title"]) and (
                 "which papers are related to paper" in lowered
                 or "papers related to paper" in lowered
                 or "papers are related to" in lowered
@@ -296,6 +321,7 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 author_name=extracted["author_name"],
                 category_name=extracted["category_name"],
                 paper_id=extracted["paper_id"],
+                title=extracted["title"],
                 count_only=effective_count_only,
             )
             result["router"] = {
@@ -307,12 +333,18 @@ def _route_question(question: str, count_only: bool = False) -> dict:
             return result
 
     relation_mode = extracted["mode"]
+    if relation_mode == "author_to_papers" and not extracted["author_name"]:
+        relation_mode = None
+    elif relation_mode == "category_to_papers" and not extracted["category_name"]:
+        relation_mode = None
+
     if relation_mode in VALID_RELATION_MODES:
         result = relation_filter(
             mode=relation_mode,
             author_name=extracted["author_name"],
             category_name=extracted["category_name"],
             paper_id=extracted["paper_id"],
+            title=extracted["title"],
             category_names=extracted["category_names"],
             logic=extracted["logic"] or "or",
             has_doi=extracted["has_doi"],
@@ -361,7 +393,7 @@ def _route_question(question: str, count_only: bool = False) -> dict:
             category_name=extracted["category_name"],
             count_only=effective_count_only,
         )
-        result["router"] = {"selected_endpoint": "entity_lookup", **response_meta}
+        result["router"] = {"selected_endpoint": "entity_lookup", "selected_mode": "entity_lookup", **response_meta}
         return result
 
     raise HTTPException(
@@ -387,7 +419,7 @@ def query_entity_from_natural_language(
     question: str = Query(..., description="Natural-language question already routed to entity_lookup"),
     count_only: bool = False,
 ):
-    extracted = extract_all(question)
+    extracted = extract_all(question, strategy="entity_lookup")
     params = {
         "paper_id": extracted["paper_id"],
         "title": extracted["title"],
@@ -411,7 +443,7 @@ def query_relation_from_natural_language(
     question: str = Query(..., description="Natural-language question already routed to relation_filter"),
     count_only: bool = False,
 ):
-    extracted = extract_all(question)
+    extracted = extract_all(question, strategy="relation_filter")
     lowered = question.lower()
 
     mode = extracted["mode"]
@@ -424,23 +456,29 @@ def query_relation_from_natural_language(
     }:
         mode = None
 
+    has_paper = bool(extracted["paper_id"] or extracted["title"])
+
     if mode is None:
-        if extracted["paper_id"] and (
+        if has_paper and (
             "authors of paper" in lowered
             or "paper to authors" in lowered
             or "who wrote paper" in lowered
             or "who are the authors of" in lowered
             or "author of paper" in lowered
+            or "who wrote" in lowered
+            or "who are the authors" in lowered
         ):
             mode = "paper_to_authors"
 
-        elif extracted["paper_id"] and (
+        elif has_paper and (
             "categories of paper" in lowered
             or "paper to categories" in lowered
             or "which categories does paper" in lowered
             or "what categories does paper" in lowered
+            or "what categories is" in lowered
             or "belong to" in lowered
             or "belongs to" in lowered
+            or "what category is" in lowered
         ):
             mode = "paper_to_categories"
 
@@ -451,6 +489,11 @@ def query_relation_from_natural_language(
             or "papers written by" in lowered
             or "which papers are written by" in lowered
             or "what papers are written by" in lowered
+            or "what papers has" in lowered
+            or "which papers has" in lowered
+            or "what has" in lowered
+            or "papers did" in lowered
+            or "papers does" in lowered
         ):
             mode = "author_to_papers"
 
@@ -478,6 +521,7 @@ def query_relation_from_natural_language(
         "author_name": extracted["author_name"],
         "category_name": extracted["category_name"],
         "paper_id": extracted["paper_id"],
+        "title": extracted["title"],
         "category_names": extracted["category_names"],
         "logic": extracted["logic"] or "or",
         "has_doi": extracted["has_doi"],
@@ -502,7 +546,7 @@ def query_multihop_from_natural_language(
     question: str = Query(..., description="Natural-language question already routed to multi_hop"),
     count_only: bool = False,
 ):
-    extracted = extract_all(question)
+    extracted = extract_all(question, strategy="multi_hop")
     lowered = question.lower()
 
     hops = _derive_hops_from_mode(extracted["mode"], extracted["hops"])
@@ -519,6 +563,13 @@ def query_multihop_from_natural_language(
             mode = "category_to_authors"
             hops = 2
 
+        elif extracted["author_name"] and extracted["category_name"] and (
+            "co-author" in lowered
+            or "co author" in lowered
+        ):
+            mode = "co_authors_in_category"
+            hops = 3
+
         elif extracted["author_name"] and (
             "author to categories" in lowered
             or "categories written by" in lowered
@@ -532,7 +583,7 @@ def query_multihop_from_natural_language(
             mode = "author_to_categories"
             hops = 2
 
-        elif extracted["paper_id"] and (
+        elif (extracted["paper_id"] or extracted["title"]) and (
             "papers by same author" in lowered
             or "other papers by same author" in lowered
             or "same author as paper" in lowered
@@ -541,6 +592,8 @@ def query_multihop_from_natural_language(
             or "written by the same author as" in lowered
             or "which papers are written by the same author as paper" in lowered
             or "which papers are by the same author as paper" in lowered
+            or "co-authors of" in lowered
+            or "what other papers" in lowered
         ):
             mode = "paper_to_other_papers_by_same_authors"
             hops = 2
@@ -562,7 +615,7 @@ def query_multihop_from_natural_language(
             mode = "category_to_papers_by_authors"
             hops = 3
 
-        elif extracted["paper_id"] and (
+        elif (extracted["paper_id"] or extracted["title"]) and (
             "authors in same categories" in lowered
             or "authors connected to the same categories as paper" in lowered
             or "same categories" in lowered
@@ -590,7 +643,7 @@ def query_multihop_from_natural_language(
             mode = "category_to_related_categories_via_authors"
             hops = 4
 
-        elif extracted["paper_id"] and (
+        elif (extracted["paper_id"] or extracted["title"]) and (
             "which papers are related to paper" in lowered
             or "papers related to paper" in lowered
             or "papers are related to" in lowered
@@ -608,6 +661,7 @@ def query_multihop_from_natural_language(
         "author_name": extracted["author_name"],
         "category_name": extracted["category_name"],
         "paper_id": extracted["paper_id"],
+        "title": extracted["title"],
     }
 
     result = multi_hop(**params, count_only=count_only)
@@ -622,8 +676,8 @@ def query_multihop_from_natural_language(
 
 
 @app.get("/kg/debug_extract")
-def debug_extract(question: str):
-    extracted = extract_all(question)
+def debug_extract(question: str, strategy: str | None = None):
+    extracted = extract_all(question, strategy=strategy)
     derived_hops = _derive_hops_from_mode(extracted["mode"], extracted["hops"])
     return {
         **extracted,

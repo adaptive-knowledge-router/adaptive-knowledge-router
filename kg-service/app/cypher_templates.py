@@ -245,7 +245,9 @@ LIMIT 20
 """
 
 RELATION_FILTER_CATEGORY_TO_PAPERS_COUNT = """
-MATCH (c:Category {category_name: $category_name})<-[:IN_CATEGORY]-(p:Paper)
+MATCH (c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+MATCH (c)<-[:IN_CATEGORY]-(p:Paper)
 RETURN count(DISTINCT p) AS total_count
 """
 
@@ -456,6 +458,27 @@ MATCH (a:Author)-[:WROTE]->(p1:Paper {paper_id: $paper_id})
 MATCH (a)-[:WROTE]->(p2:Paper)
 WHERE p1.paper_id <> p2.paper_id
 RETURN count(DISTINCT p2) AS total_count
+"""
+
+MULTI_HOP_3_CO_AUTHORS_IN_CATEGORY = """
+MATCH (a1:Author)
+WHERE toLower(a1.author_name) CONTAINS toLower($author_name)
+MATCH (a1)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+WHERE a1.author_name <> a2.author_name
+MATCH (a2)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+RETURN DISTINCT a2.author_name AS co_author
+LIMIT 20
+"""
+
+MULTI_HOP_3_CO_AUTHORS_IN_CATEGORY_COUNT = """
+MATCH (a1:Author)
+WHERE toLower(a1.author_name) CONTAINS toLower($author_name)
+MATCH (a1)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+WHERE a1.author_name <> a2.author_name
+MATCH (a2)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+RETURN count(DISTINCT a2) AS total_count
 """
 
 MULTI_HOP_3_AUTHOR_TO_SAME_CATEGORY_PAPERS = """
