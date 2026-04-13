@@ -256,6 +256,8 @@ def _route_question(question: str, count_only: bool = False) -> dict:
                 or "which papers are by the same author as paper" in lowered
                 or "co-authors of" in lowered
                 or "what other papers" in lowered
+                or "co-authored by authors of" in lowered
+                or "co-authored by the authors of" in lowered
             ):
                 mode = "paper_to_other_papers_by_same_authors"
                 hops = 2
@@ -552,6 +554,16 @@ def query_multihop_from_natural_language(
     hops = _derive_hops_from_mode(extracted["mode"], extracted["hops"])
     mode = extracted["mode"]
 
+    # Pre-check: override LLM mode when query asks for categories from an author
+    if extracted["author_name"] and (
+        "which categories" in lowered
+        or "what categories" in lowered
+        or "which other categories" in lowered
+        or "what other categories" in lowered
+    ):
+        mode = "author_to_categories"
+        hops = 2
+
     if mode is None:
         if extracted["category_name"] and (
             "category to authors" in lowered
@@ -594,6 +606,8 @@ def query_multihop_from_natural_language(
             or "which papers are by the same author as paper" in lowered
             or "co-authors of" in lowered
             or "what other papers" in lowered
+            or "co-authored by authors of" in lowered
+            or "co-authored by the authors of" in lowered
         ):
             mode = "paper_to_other_papers_by_same_authors"
             hops = 2

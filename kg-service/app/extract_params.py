@@ -13,6 +13,11 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 KNOWN_CATEGORIES = {
     "cs.AI", "cs.LG", "cs.CL", "cs.CV",
     "cs.NE", "cs.IR", "cs.RO", "stat.ML",
+    "cs.DC", "cs.DS", "cs.SY", "cs.IT",
+    "cs.HC", "cs.CY", "cs.DB", "cs.CC",
+    "cs.LO", "cs.DL", "cs.MM", "cs.RO",
+    "math.OC", "math.IT", "math.ST",
+    "stat.TH", "eess.SP", "q-bio.QM",
 }
 
 PAPER_ID_PATTERN = re.compile(r"\b\d{4}\.\d{4,5}\b")
@@ -31,6 +36,14 @@ _TITLE_PATTERNS = [
     re.compile(r"\bthe\s+paper\s+(.+?)\??$", re.IGNORECASE),
     # quoted title: paper 'TITLE' or paper "TITLE"
     re.compile(r"\bpaper\s+['\"](.+?)['\"]", re.IGNORECASE),
+    # "of the TITLE paper" — title between "of the" and "paper",
+    # skipping "of the authors/paper ..." which are not titles
+    re.compile(
+        r"of\s+the\s+(?!(?:paper|authors?)\b)(.+?)\s+paper\b",
+        re.IGNORECASE,
+    ),
+    # "the TITLE paper" — title comes before the word "paper"
+    re.compile(r"\bthe\s+(.+?)\s+paper\b", re.IGNORECASE),
 ]
 
 # Regex fallbacks for author name extraction when LLM fails
@@ -88,8 +101,8 @@ Query: "Who are the authors of the paper Deep Learning?"
 Query: "Who are the authors of the paper Sequential anomaly detection in the presence of noise?"
 {{"title": "Sequential anomaly detection in the presence of noise", "author_name": null, "category_name": null}}
 
-Query: "List the authors of the paper Learning from compressed observations"
-{{"title": "Learning from compressed observations", "author_name": null, "category_name": null}}
+Query: "List the authors of the paper Attention is All You Need"
+{{"title": "Attention is All You Need", "author_name": null, "category_name": null}}
 
 Query: "Show me paper 1706.03762"
 {{"title": null, "author_name": null, "category_name": null}}
@@ -129,8 +142,8 @@ Query: "What papers are in category cs.AI?"
 Query: "What categories is the paper Fast Private Data Release Algorithms published in?"
 {{"title": "Fast Private Data Release Algorithms", "author_name": null, "category_name": null}}
 
-Query: "Who are the authors of the paper k-Sparse Autoencoders?"
-{{"title": "k-Sparse Autoencoders", "author_name": null, "category_name": null}}
+Query: "Who are the authors of the paper BERT: Pre-training of Deep Bidirectional Transformers?"
+{{"title": "BERT: Pre-training of Deep Bidirectional Transformers", "author_name": null, "category_name": null}}
 
 Query: "What papers in machine learning are written by Ilya Sutskever?"
 {{"title": null, "author_name": "Ilya Sutskever", "category_name": "cs.LG"}}
@@ -138,8 +151,8 @@ Query: "What papers in machine learning are written by Ilya Sutskever?"
 Query: "List papers by Andrew Ng in computer vision"
 {{"title": null, "author_name": "Andrew Ng", "category_name": "cs.CV"}}
 
-Query: "Show papers by Maxim Raginsky in cs.IT"
-{{"title": null, "author_name": "Maxim Raginsky", "category_name": "cs.IR"}}
+Query: "Show papers by Yoshua Bengio in cs.LG"
+{{"title": null, "author_name": "Yoshua Bengio", "category_name": "cs.LG"}}
 
 Query: "{query}"
 """
@@ -174,14 +187,20 @@ Query: "Which co-authors of Attention is All You Need also published in cs.LG?"
 Query: "What categories has Geoffrey Hinton published in?"
 {{"title": null, "author_name": "Geoffrey Hinton", "category_name": null}}
 
-Query: "What categories has Maxim Raginsky published in?"
-{{"title": null, "author_name": "Maxim Raginsky", "category_name": null}}
+Query: "What categories has Yoshua Bengio published in?"
+{{"title": null, "author_name": "Yoshua Bengio", "category_name": null}}
 
 Query: "Which authors in cs.AI have also published in stat.ML?"
 {{"title": null, "author_name": null, "category_name": "cs.AI"}}
 
-Query: "What other papers did the authors of k-Sparse Autoencoders write?"
-{{"title": "k-Sparse Autoencoders", "author_name": null, "category_name": null}}
+Query: "What other papers did the authors of Generative Adversarial Networks write?"
+{{"title": "Generative Adversarial Networks", "author_name": null, "category_name": null}}
+
+Query: "Which other papers in category cs.AI have been co-authored by the authors of the Dropout: A Simple Way to Prevent Neural Networks from Overfitting paper?"
+{{"title": "Dropout: A Simple Way to Prevent Neural Networks from Overfitting", "author_name": null, "category_name": "cs.AI"}}
+
+Query: "Which other papers have been written by the authors of the Deep Residual Learning for Image Recognition paper?"
+{{"title": "Deep Residual Learning for Image Recognition", "author_name": null, "category_name": null}}
 
 Query: "What papers are in the same categories as Yoshua Bengio?"
 {{"title": null, "author_name": "Yoshua Bengio", "category_name": null}}
@@ -225,8 +244,17 @@ Query: "Who wrote Attention is All You Need?"
 Query: "What papers has Yann LeCun written?"
 {{"title": null, "author_name": "Yann LeCun", "category_name": null, "mode": "author_to_papers"}}
 
-Query: "Which co-authors of k-Sparse Autoencoders also published in cs.LG?"
-{{"title": "k-Sparse Autoencoders", "author_name": null, "category_name": "cs.LG", "mode": "paper_to_other_papers_by_same_authors"}}
+Query: "Which co-authors of Generative Adversarial Networks also published in cs.LG?"
+{{"title": "Generative Adversarial Networks", "author_name": null, "category_name": "cs.LG", "mode": "paper_to_other_papers_by_same_authors"}}
+
+Query: "Which other papers in category cs.AI have been co-authored by authors of the paper Attention is All You Need?"
+{{"title": "Attention is All You Need", "author_name": null, "category_name": "cs.AI", "mode": "paper_to_other_papers_by_same_authors"}}
+
+Query: "Which other categories, besides cs.LG, have papers co-authored by Yann LeCun?"
+{{"title": null, "author_name": "Yann LeCun", "category_name": "cs.LG", "mode": "author_to_categories"}}
+
+Query: "What categories besides cs.AI has Geoffrey Hinton published in?"
+{{"title": null, "author_name": "Geoffrey Hinton", "category_name": "cs.AI", "mode": "author_to_categories"}}
 
 Query: "{query}"
 """
