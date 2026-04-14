@@ -26,6 +26,14 @@ DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b")
 # Regex fallback for paper title extraction when LLM fails
 # Titles always follow "the paper" in our query templates
 _TITLE_PATTERNS = [
+    # "who are the authors of TITLE?" / "who wrote TITLE?" — extract title, NOT author
+    re.compile(
+        r"(?:who\s+(?:are|were)\s+the\s+authors?\s+of\s+(?:(?:the\s+)?paper\s+)?)(.+?)\??$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:who\s+wrote|list\s+the\s+authors?\s+of)\s+(?:(?:the\s+)?paper\s+)?(.+?)\??$", re.IGNORECASE),
+    # "titled X" / "paper is titled X" / "which paper is titled X?"
+    re.compile(r"\btitled\s+['\"]?(.+?)['\"]?\s*\??$", re.IGNORECASE),
     # "of/for/about the paper TITLE" — title ends at ?, end, or transition words
     re.compile(
         r"(?:of|for|about|is|called|titled)\s+the\s+paper\s+['\"]?(.+?)['\"]?"
@@ -63,6 +71,19 @@ _AUTHOR_PATTERNS = [
 
 _CATEGORY_PATTERN = re.compile(
     r"\b(cs\.[A-Z]{2,3}|stat\.[A-Z]{2,4}|math\.[A-Z]{2,4}|eess\.[A-Z]{2,4}|q-bio\.[A-Z]{2,4})\b"
+)
+
+# Phrases that look like author names but aren't — LLM hallucinations.
+_BOGUS_AUTHOR_RE = re.compile(
+    r"^(?:the\s+)?(?:authors?\s+of|co-authors?\s+of|written\s+by|all\s+authors?)$",
+    re.IGNORECASE,
+)
+
+# Phrases that pattern-7 ("the … paper") falsely captures as titles.
+_NOT_A_TITLE_RE = re.compile(
+    r"^(?:authors?\s+of|DOI\s+of|same\s+author|co-authors?\s+of|categories?\s+of|"
+    r"fields?\s+(?:of|has|does)|written\s+by|published\s+in|papers?\s+(?:by|in|from))",
+    re.IGNORECASE,
 )
 
 
@@ -292,7 +313,7 @@ def _call_ollama(query: str, strategy: str | None = None) -> dict:
                 "stream": False,
                 "format": "json",
             },
-            timeout=30,
+            timeout=120,
         )
         resp.raise_for_status()
         raw = resp.json().get("response", "{}")
@@ -388,19 +409,56 @@ def extract_title_regex(query: str) -> str | None:
         m = pattern.search(query)
         if m:
             title = m.group(1).strip().rstrip("?.,")
+            # Reject if the "title" is actually a paper ID (e.g. 0704.0001)
+            if PAPER_ID_PATTERN.fullmatch(title):
+                continue
+            # Reject common noise phrases captured by broad patterns
+            if _NOT_A_TITLE_RE.match(title):
+                continue
             if len(title) > 3:
                 return title
     return None
 
 
 def extract_all(query: str, strategy: str | None = None) -> dict[str, Any]:
-    llm = _call_ollama(query, strategy=strategy)
+    # ── deterministic parsing first ──────────────────────────────────
     paper_id = extract_paper_id(query)
+    det_title = extract_title_regex(query)
+    det_author = extract_author_name_regex(query)
+    det_category = extract_category_regex(query)
 
-    # If LLM failed to extract entities, fall back to regex
-    author_name = llm["author_name"] or extract_author_name_regex(query)
-    title = llm["title"] or extract_title_regex(query)
-    category_name = llm["category_name"] or extract_category_regex(query)
+    # If deterministic parsing found a title, skip the LLM entirely
+    # (avoids cold-start latency and hallucination).
+    if det_title or paper_id:
+        return {
+            "paper_id"        : paper_id,
+            "title"           : det_title,
+            "doi"             : extract_doi(query),
+            "author_name"     : det_author,
+            "category_name"   : det_category,
+            "category_names"  : [det_category] if det_category else None,
+            "journal_ref"     : None,
+            "submitter"       : None,
+            "comments_contains": None,
+            "logic"           : extract_logic(query),
+            "has_doi"         : extract_has_doi(query),
+            "has_journal_ref" : extract_has_journal_ref(query),
+            "hops"            : extract_hops(query),
+            "mode"            : None,
+            "is_count_query"  : is_count_query(query),
+        }
+
+    # ── LLM extraction (fallback) ───────────────────────────────────
+    llm = _call_ollama(query, strategy=strategy)
+
+    # Reject bogus author names the LLM may hallucinate.
+    llm_author = llm["author_name"]
+    if llm_author and _BOGUS_AUTHOR_RE.match(llm_author.strip()):
+        llm_author = None
+
+    author_name = llm_author or det_author
+    title = llm["title"] or det_title
+    category_name = llm["category_name"] or det_category
 
     return {
         "paper_id"        : paper_id,

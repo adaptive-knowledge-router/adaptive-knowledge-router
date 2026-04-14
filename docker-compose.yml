@@ -11,6 +11,11 @@ services:
       - "7687:7687"
     volumes:
       - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   ollama:
     image: ollama/ollama
@@ -20,6 +25,12 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   kg-service:
     build: ./kg-service
@@ -34,8 +45,16 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - neo4j
-      - ollama
+      neo4j:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/kg/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   rag-service:
     build: ./rag-service
@@ -43,6 +62,14 @@ services:
     networks: [akr-net]
     ports:
       - "8002:8002"
+    volumes:
+      - rag_indexes:/app/indexes
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 120
+      start_period: 120s
 
   router-service:
     build: ./router-service
@@ -50,11 +77,37 @@ services:
     networks: [akr-net]
     ports:
       - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request, json; d=json.load(urllib.request.urlopen('http://localhost:8001/health')); exit(0 if d.get('model_loaded') else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  orchestrator:
+    build: ./orchestrator
+    container_name: orchestrator-service
+    ports:
+      - "8003:8003"
+    depends_on:
+      router-service:
+        condition: service_healthy
+      kg-service:
+        condition: service_healthy
+      rag-service:
+        condition: service_healthy
+    networks:
+      - akr-net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   akr-net:
-    external: true
 
 volumes:
   neo4j_data:
   ollama_data:
+  rag_indexes:

@@ -112,12 +112,40 @@ main
 ## Quick Start
 
 ```bash
-# Create network
-docker network create akr-net
+# Start all services (first run builds images and loads data — may take several minutes)
+docker compose up -d --build
 
-# Start all services
-docker compose up -d
+# Quick stack check (requires Python 3; no extra deps)
+python verify_stack.py
 
-# Pull Ollama model (first time only)
-docker exec ollama ollama pull qwen2.5:3b
+# Or poll until everything is ready (up to 120 s)
+python verify_stack.py --wait 120
+
+# Send a query through the orchestrator
+curl -X POST http://localhost:8003/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What papers has Carlos Gershenson written?"}'
 ```
+
+### Health & readiness endpoints
+
+| Service | Liveness | Readiness / detail |
+|---|---|---|
+| Router | `GET :8001/health` | `model_loaded` field confirms DeBERTa is ready |
+| KG | `GET :8000/kg/health` | Verifies Neo4j connectivity |
+| RAG | `GET :8002/health` | `bm25_ready`, `dense_ready`, `hybrid_ready` fields |
+| Orchestrator | `GET :8003/health` | Process up |
+| Orchestrator | `GET :8003/readiness` | Pings all downstream health endpoints |
+
+### First-run vs subsequent starts
+
+| Step | First run | Subsequent |
+|---|---|---|
+| Ollama model pull (qwen2.5:3b) | ~1 min download | Skipped (volume) |
+| Neo4j data load (~20k papers) | ~2 min | Skipped (volume) |
+| FAISS index build | ~45-60 min (CPU) | Skipped (volume) |
+| HuggingFace model download | ~1 min | Cached in image |
+
+> **Tip:** The RAG service has the longest cold-start. Use
+> `docker compose logs -f rag-service` to watch FAISS indexing progress.
+> All other services are usually ready within 30 s.

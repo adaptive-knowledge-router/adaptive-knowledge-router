@@ -1,0 +1,4 @@
+# Force LF line endings for shell scripts (prevents CRLF issues in Docker)
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+*.safetensors filter=lfs diff=lfs merge=lfs -text
