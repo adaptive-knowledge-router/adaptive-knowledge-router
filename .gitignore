@@ -22,6 +22,10 @@ rag-service/indexes/
 !router-service/arxiv_queries.jsonl
 !router-service/labeled_processed_ids.json
 
+# Allow the committed router model (required for router-service to start)
+!router-service/router_model/
+!router-service/router_model/**
+
 router-service/label_queries.py
 
 

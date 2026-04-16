@@ -600,6 +600,32 @@ def query_relation_from_natural_language(
         elif extracted["category_names"] and len(extracted["category_names"]) >= 2:
             mode = "papers_in_categories"
 
+    # ── Reroute misclassified queries before giving up ────────────────
+
+    # author-to-categories is a multi-hop query, not relation_filter
+    if mode is None and extracted["author_name"] and _AUTHOR_TO_CATEGORIES_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # paper-to-authors detected via regex but missed by keyword matching above
+    if mode is None and has_paper and _AUTHOR_OF_PAPER_RE.search(question):
+        mode = "paper_to_authors"
+
+    # paper-to-categories detected via regex
+    if mode is None and has_paper and _CATEGORIES_OF_PAPER_RE.search(question):
+        mode = "paper_to_categories"
+
+    # multi-hop patterns misrouted here by the router model
+    if mode is None and _MULTI_HOP_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # title/paper_id with no relation intent → entity_lookup
+    if mode is None and has_paper:
+        return query_entity_from_natural_language(question=question, count_only=count_only)
+
+    # bare author/category name without relation intent → entity_lookup
+    if mode is None and (extracted["author_name"] or extracted["category_name"]):
+        return query_entity_from_natural_language(question=question, count_only=count_only)
+
     if mode is None:
         raise HTTPException(status_code=400, detail="Could not infer relation_filter mode from the question.")
 

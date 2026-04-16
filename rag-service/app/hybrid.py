@@ -7,20 +7,17 @@ from app.dense import DenseRetriever
 class HybridRetriever:
     def __init__(
         self,
+        bm25_retriever: BM25Retriever,
+        dense_retriever: DenseRetriever,
         bm25_top_k=10,
         dense_top_k=10,
         reranker_model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        dense_model_name="BAAI/bge-small-en-v1.5",
-        max_docs=None,
     ):
         self.bm25_top_k = bm25_top_k
         self.dense_top_k = dense_top_k
 
-        self.bm25 = BM25Retriever()
-        self.dense = DenseRetriever(
-            model_name=dense_model_name,
-            max_docs=max_docs
-        )
+        self.bm25 = bm25_retriever
+        self.dense = dense_retriever
 
         self.reranker = CrossEncoder(reranker_model_name)
 
