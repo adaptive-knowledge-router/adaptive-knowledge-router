@@ -55,6 +55,13 @@ def _resolve_paper_id(paper_id: str | None, title: str | None) -> str | None:
         results = _safe_run(ENTITY_LOOKUP_PAPER_BY_TITLE, {"title": title})
         if results:
             return results[0].get("paper_id")
+        # Fallback: try first 5 words in case title has punctuation mismatch
+        words = title.split()
+        if len(words) >= 5:
+            short_title = " ".join(words[:5])
+            results = _safe_run(ENTITY_LOOKUP_PAPER_BY_TITLE, {"title": short_title})
+            if results:
+                return results[0].get("paper_id")
     return None
 
 

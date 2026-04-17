@@ -72,4 +72,8 @@ def predict(req: PredictRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    ready = tokenizer is not None and model is not None
+    return {
+        "status": "ok" if ready else "loading",
+        "model_loaded": ready,
+    }
