@@ -89,6 +89,9 @@ services:
     container_name: orchestrator-service
     ports:
       - "8003:8003"
+    environment:
+      ORCH_OLLAMA_URL: http://ollama:11434
+      ORCH_ANSWER_MODEL: qwen2.5:1.5b
     depends_on:
       router-service:
         condition: service_healthy
@@ -96,13 +99,16 @@ services:
         condition: service_healthy
       rag-service:
         condition: service_healthy
+      ollama:
+        condition: service_started
     networks:
       - akr-net
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 30
+      start_period: 60s
 
 networks:
   akr-net:

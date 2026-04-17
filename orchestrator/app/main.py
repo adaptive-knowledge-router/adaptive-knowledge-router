@@ -8,12 +8,14 @@ import time
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from app.config import settings
 from app.schemas.queries import QueryRequest
 from app.schemas.responses import QueryResponse
 from app.services.dispatcher import Dispatcher
 from app.services.synthesizer import Synthesizer
+from app.ui import UI_HTML
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +30,12 @@ synthesizer = Synthesizer()
 
 
 # ── endpoints ─────────────────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+async def ui():
+    """Serve the query UI."""
+    return UI_HTML
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -56,13 +64,13 @@ async def query(req: QueryRequest) -> QueryResponse:
             detail=f"Downstream service returned {exc.response.status_code}",
         )
 
-    total_ms = (time.perf_counter() - start) * 1000.0
+    retrieval_ms = (time.perf_counter() - start) * 1000.0
 
     response = await synthesizer.build_response(
         query=req.query,
         prediction=prediction,
         retrieval=retrieval,
-        total_latency_ms=round(total_ms, 2),
+        retrieval_latency_ms=round(retrieval_ms, 2),
     )
 
     logger.info(
@@ -99,6 +107,14 @@ async def readiness() -> dict:
                 checks[name] = data.get("status", "unknown")
             except Exception as exc:
                 checks[name] = f"unreachable: {type(exc).__name__}"
+
+        # Ollama has no "status" key — a 200 from /api/tags means healthy.
+        try:
+            r = await client.get(f"{settings.ollama_url}/api/tags")
+            r.raise_for_status()
+            checks["ollama"] = "ok"
+        except Exception as exc:
+            checks["ollama"] = f"unreachable: {type(exc).__name__}"
 
     all_ok = all(v == "ok" for v in checks.values())
     return {"status": "ok" if all_ok else "degraded", "services": checks}

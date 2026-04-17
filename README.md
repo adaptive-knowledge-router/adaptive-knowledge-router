@@ -52,6 +52,8 @@ A microservice system that intelligently routes natural language queries to the 
     │  Ollama :11434     │
     │  qwen2.5:3b        │
     │  (entity extract)  │
+    │  qwen2.5:1.5b       │
+    │  (answer synthesis) │
     └────────────────────┘
 ```
 
@@ -79,9 +81,79 @@ The router classifies each query into one of **6 strategies**:
 | KG Service | 8000 | FastAPI + Neo4j + Ollama (qwen2.5:3b) |
 | Router Service | 8001 | FastAPI + DeBERTa-v3-base (fine-tuned) |
 | RAG Service | 8002 | FastAPI + FAISS + SentenceTransformers |
-| Orchestrator | 8003 | FastAPI |
+| Orchestrator | 8003 | FastAPI + Ollama (qwen2.5:1.5b for synthesis) |
 | Neo4j | 7474 / 7687 | Graph database |
-| Ollama | 11434 | Local LLM for entity extraction |
+| Ollama | 11434 | Local LLM: `qwen2.5:3b` (KG entity extraction), `qwen2.5:1.5b` (answer synthesis) |
+
+---
+
+## Answer Synthesis
+
+After the router dispatches the query and results are retrieved from KG or RAG, the orchestrator calls the **Ollama LLM** to produce a concise, evidence-grounded answer.
+
+The synthesis model (`qwen2.5:1.5b` by default) is **separate** from the KG entity-extraction model (`qwen2.5:3b`). This lets you choose a model optimised for natural-language answers without affecting KG extraction quality. On first start the orchestrator's entrypoint pulls the synthesis model automatically.
+
+- **Raw results are preserved** — the `results` array in the response is unchanged.
+- `synthesized_answer` and `synthesis_metadata` appear **before** `results` in the JSON response.
+- `synthesis_metadata` reports the model name, synthesis latency, result count, and an `error` field (null on success).
+- The LLM is instructed to answer **only from the retrieved evidence**. If evidence is insufficient it will say so explicitly.
+- If the LLM call fails, `synthesized_answer` is `null` but `synthesis_metadata` is still returned with a descriptive `error` string. Raw results are never affected.
+- No model retraining is involved; this is a pure post-retrieval step.
+
+**Response example (success):**
+
+```json
+{
+  "query": "What papers has Carlos Gershenson written?",
+  "strategy": "relation_filter",
+  "confidence": 0.92,
+  "synthesized_answer": "Carlos Gershenson has authored papers including ...",
+  "synthesis_metadata": {
+    "model": "qwen2.5:1.5b",
+    "synthesis_latency_ms": 1234.56,
+    "used_results_count": 5,
+    "error": null
+  },
+  "results": [ ... ],
+  "latency_ms": 345.12,
+  "source": "kg"
+}
+```
+
+**Response example (synthesis failure — raw results still returned):**
+
+```json
+{
+  "query": "...",
+  "strategy": "hybrid",
+  "confidence": 0.87,
+  "synthesized_answer": null,
+  "synthesis_metadata": {
+    "model": "qwen2.5:1.5b",
+    "synthesis_latency_ms": 0.0,
+    "used_results_count": 5,
+    "error": "ConnectError: failed to connect to Ollama"
+  },
+  "results": [ ... ],
+  "latency_ms": 210.0,
+  "source": "rag"
+}
+```
+
+**Configuration (env vars):**
+
+| Variable | Default | Description |
+|---|---|---|
+| `ORCH_OLLAMA_URL` | `http://ollama:11434` | Ollama service URL |
+| `ORCH_ANSWER_MODEL` | `qwen2.5:1.5b` | Model for answer synthesis (separate from KG) |
+| `ORCH_OLLAMA_TIMEOUT` | `60.0` | Timeout in seconds |
+
+**Verification:**
+
+```bash
+python verify_synthesis.py             # immediate check
+python verify_synthesis.py --wait 120  # poll until ready
+```
 
 ---
 
@@ -135,13 +207,14 @@ curl -X POST http://localhost:8003/query \
 | KG | `GET :8000/kg/health` | Verifies Neo4j connectivity |
 | RAG | `GET :8002/health` | `bm25_ready`, `dense_ready`, `hybrid_ready` fields |
 | Orchestrator | `GET :8003/health` | Process up |
-| Orchestrator | `GET :8003/readiness` | Pings all downstream health endpoints |
+| Orchestrator | `GET :8003/readiness` | Pings router, KG, RAG, and Ollama |
 
 ### First-run vs subsequent starts
 
 | Step | First run | Subsequent |
 |---|---|---|
 | Ollama model pull (qwen2.5:3b) | ~1 min download | Skipped (volume) |
+| Ollama model pull (qwen2.5:1.5b) | ~1 min download | Skipped (volume) |
 | Neo4j data load (~20k papers) | ~2 min | Skipped (volume) |
 | FAISS index build | ~45-60 min (CPU) | Skipped (volume) |
 | HuggingFace model download | ~1 min | Cached in image |

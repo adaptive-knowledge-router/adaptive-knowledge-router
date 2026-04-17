@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     kg_url: str = "http://kg-service:8000"
     rag_url: str = "http://rag-service:8002"
 
+    # ── Ollama LLM (answer synthesis) ──────────────────────────────────
+    ollama_url: str = "http://ollama:11434"
+    answer_model: str = "qwen2.5:1.5b"
+    ollama_timeout: float = 60.0
+
     # ── HTTP client settings ──────────────────────────────────────────
     # Timeout (seconds) for each outbound request to a downstream service.
     request_timeout: float = 120.0
@@ -31,6 +36,9 @@ class Settings(BaseSettings):
     # orchestrator should treat the prediction as uncertain. Downstream
     # handlers can decide whether to fall back to a default strategy.
     confidence_threshold: float = 0.4
+
+    # ── Answer cache ──────────────────────────────────────────────────
+    cache_size: int = 128
 
     # ── Default retrieval parameters ──────────────────────────────────
     # Default number of results to request from RAG endpoints.
