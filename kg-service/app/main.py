@@ -118,6 +118,7 @@ VALID_MULTIHOP_MODES = {
     "category_to_papers_by_authors",
     "paper_to_authors_in_same_categories",
     "co_authors_in_category",
+    "paper_to_co_authors_in_category",
     "author_to_related_authors_via_shared_categories",
     "category_to_related_categories_via_authors",
     "paper_to_related_papers_via_authors_and_categories",
@@ -447,6 +448,8 @@ _MULTI_HOP_RE = _re.compile(
     r"other\s+papers?\s+(?:written|authored)\s+by|"
     r"what\s+other\s+papers|"
     r"co-author\w*\s+of|"
+    r"co-authored\s+(?:papers?\s+)?with|"
+    r"researchers?\s+(?:who\s+)?(?:have\s+)?co-author\w*|"
     r"related\s+papers?\s+via|"
     r"papers?\s+by\s+same\s+author|"
     r"authors?\s+in\s+same\s+categor)",
@@ -544,13 +547,28 @@ def query_relation_from_natural_language(
         "paper_to_authors",
         "paper_to_categories",
         "papers_in_categories",
+        "paper_to_papers_in_category",
     }:
         mode = None
 
     has_paper = bool(extracted["paper_id"] or extracted["title"])
 
     if mode is None:
-        if has_paper and (
+        # Check paper_to_papers_in_category FIRST — "by the authors of" / "co-authored by"
+        # must be caught before the generic "authored by" → author_to_papers path.
+        if has_paper and extracted["category_name"] and (
+            "papers in category" in lowered
+            or "other papers in" in lowered
+            or "papers in cs." in lowered
+            or "co-authored by the authors of" in lowered
+            or "co-authored by authors of" in lowered
+            or "written by the authors of" in lowered
+            or "written by authors of" in lowered
+            or "by the authors of" in lowered
+        ):
+            mode = "paper_to_papers_in_category"
+
+        elif has_paper and (
             "authors of paper" in lowered
             or "paper to authors" in lowered
             or "who wrote paper" in lowered
@@ -690,12 +708,46 @@ def query_multihop_from_natural_language(
             mode = "category_to_authors"
             hops = 2
 
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "colleagues" in lowered
+            or "co-authored by colleagues" in lowered
+            or "colleagues of the authors" in lowered
+        ):
+            # Asks for PAPERS by colleagues in a category — delegate to relation_filter
+            return query_relation_from_natural_language(question=question, count_only=count_only)
+
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "co-authored by the authors of" in lowered
+            or "co-authored by authors of" in lowered
+            or "written by the authors of" in lowered
+            or "written by authors of" in lowered
+        ):
+            # Query asks for PAPERS in a category by the same authors as a given paper
+            return query_relation_from_natural_language(question=question, count_only=count_only)
+
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "co-author" in lowered
+            or "co author" in lowered
+        ):
+            mode = "paper_to_co_authors_in_category"
+            hops = 3
+
         elif extracted["author_name"] and extracted["category_name"] and (
             "co-author" in lowered
             or "co author" in lowered
         ):
             mode = "co_authors_in_category"
             hops = 3
+
+        elif extracted["author_name"] and (
+            "co-author" in lowered
+            or "co author" in lowered
+            or "co-authored" in lowered
+            or "collaborated with" in lowered
+        ):
+            # co-authors of author without a category constraint
+            mode = "author_to_related_authors_via_shared_categories"
+            hops = 4
 
         elif extracted["author_name"] and (
             "author to categories" in lowered

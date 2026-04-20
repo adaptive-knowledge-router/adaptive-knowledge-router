@@ -1,0 +1,182 @@
+{
+  "Who are the authors of the paper Determining the Unithood of Word Sequences using Mutual Information and Independence Measure?": {
+    "strategy": "entity_lookup",
+    "paper_id": "0810.0156",
+    "ground_truth": "Mohammed Bennamoun, Wei Liu, Wilson Wong",
+    "has_data": true
+  },
+  "Who is the author of the paper Stabilizing knowledge through standards - A perspective for the humanities": {
+    "strategy": "entity_lookup",
+    "paper_id": "1011.0519",
+    "ground_truth": "Laurent Romary (IDSL, INRIA Saclay - Ile de France)",
+    "has_data": true
+  },
+  "Who are the authors of the paper SPUDD: Stochastic Planning using Decision Diagrams?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1301.6704",
+    "ground_truth": "Craig Boutilier, Alan Hu, Robert St-Aubin, Jesse Hoey",
+    "has_data": true
+  },
+  "Who are the authors of the paper Intrinsic Subspace Evaluation of Word Embedding Representations?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1606.07902",
+    "ground_truth": "Hinrich Sch\\\"utze, Yadollah Yaghoobzadeh",
+    "has_data": true
+  },
+  "Who are the authors of the paper Bounded Optimal Exploration in MDP?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1604.01350",
+    "ground_truth": "Kenji Kawaguchi",
+    "has_data": true
+  },
+  "Who are the authors of the paper Network analysis of a corpus of undeciphered Indus civilization inscriptions indicates syntactic organization?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1005.4997",
+    "ground_truth": "Raj Kumar Pan and Bryan Kenneth Wells, Md Izhar Ashraf, Sitabhra Sinha",
+    "has_data": true
+  },
+  "Who is the author of the paper Introduction of the weight edition errors in the Levenshtein distance?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1208.4503",
+    "ground_truth": "Gueddah Hicham",
+    "has_data": true
+  },
+  "Who are the authors of the paper An Efficient Dual Approach to Distance Metric Learning?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1302.3219",
+    "ground_truth": "Anton van den Hengel, Lei Wang, Fayao Liu, Junae Kim, Chunhua Shen",
+    "has_data": true
+  },
+  "Who is the author of the paper Generating Politically-Relevant Event Data?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1609.06239",
+    "ground_truth": "John Beieler",
+    "has_data": true
+  },
+  "Who are the authors of the paper Actively Learning to Attract Followers on Twitter?": {
+    "strategy": "entity_lookup",
+    "paper_id": "1504.04114",
+    "ground_truth": "Shie Mannor, Timothy A. Mann, Nir Levine",
+    "has_data": true
+  },
+  "What other papers in category cs.AI are written by the authors of Advances in Probabilistic Reasoning?": {
+    "strategy": "relation_filter",
+    "paper_id": "1303.5718",
+    "ground_truth": "Modular Belief Updates and Confusion about Measures of Certainty in Artificial Intelligence Research, Proceedings of the Ninth Conference on Uncertainty in Artificial Intelligence (1993), Probabilistic Interpretations for MYCIN's Certainty Factors, A Backwards View for Assessment, An Axiomatic Framework for Belief Updates, The Myth of Modularity in Rule-Based Systems, The Role of Calculi in Uncertain Inference Systems, A Perspective on Confidence and Its Use in Focusing Attention During Knowledge Acquisition, An Empirical Comparison of Three Inference Methods, A Tractable Inference Algorithm for Diagnosing Multiple Diseases, The Compilation of Decision Models, Separable and transitive graphoids, A Combination of Cutset Conditioning with Clique-Tree Propagation in the Pathfinder System, Problem Formulation as the Reduction of a Decision Model, Similarity Networks for the Construction of Multiple-Faults Belief Networks, An Approximate Nonmyopic Computation for Value of Information, Inference Algorithms for Similarity Networks, Causal Independence for Knowledge Acquisition and Inference, Diagnosis of Multiple Faults: A Sensitivity Analysis, A Decision-Based View of Causality",
+    "has_data": true
+  },
+  "What other papers in category cs.CV are written by the authors of SqueezeNet?": {
+    "strategy": "relation_filter",
+    "paper_id": "1602.07360",
+    "ground_truth": "Learning both Weights and Connections for Efficient Neural Networks, Generate Image Descriptions based on Deep RNN and Memory Cells for Images Features, Robust Face Recognition using Local Illumination Normalization and Discriminant Feature Point Selection",
+    "has_data": true
+  },
+  "What other papers in category cs.CV are written by authors who have published papers like Modeling Visual Information Processing in Brain: A Computer Vision Point of View and Approach?": {
+    "strategy": "relation_filter",
+    "paper_id": "0708.0927",
+    "ground_truth": "Adaboost with \"Keypoint Presence Features\" for Real-Time Vehicle Visual Detection, Geometry-Based Next Frame Prediction from Monocular Video, The Projected Power Method: An Efficient Algorithm for Joint Alignment from Pairwise Differences, Graph-Structured Representations for Visual Question Answering, A Deep Metric for Multimodal Registration, Fast and Effective Algorithms for Symmetric Nonnegative Matrix Factorization, The ACRV Picking Benchmark (APB): A Robotic Shelf Picking Benchmark to Foster Reproducible Research, Image-to-Markup Generation with Coarse-to-Fine Attention, Context Aware Nonnegative Matrix Factorization Clustering, A Perspective on Deep Imaging, Quick and energy-efficient Bayesian computing of binocular disparity using stochastic digital signals, Proceedings of the third \"international Traveling Workshop on Interactions between Sparse models and Technology\" (iTWIST'16), Tracking Tensor Subspaces with Informative Random Sampling for Real-Time MR Imaging, Crafting a multi-task CNN for viewpoint estimation, 3D Simulation for Robot Arm Control with Deep Q-Learning, Unsupervised Monocular Depth Estimation with Left-Right Consistency, A Tube-and-Droplet-based Approach for Representing and Analyzing Motion Trajectories, Automatic Selection of Stochastic Watershed Hierarchies, Generating Videos with Scene Dynamics, UberNet: Training a `Universal' Convolutional Neural Network for Low-, Mid-, and High-Level Vision using Diverse Datasets and Limited Memory",
+    "has_data": true
+  },
+  "What other papers in category stat.ML are written by the authors of 'Randomized sketches for kernels: Fast and optimal non-parametric regression'?": {
+    "strategy": "relation_filter",
+    "paper_id": "1501.06195",
+    "ground_truth": "Local Maxima in the Likelihood of Gaussian Mixture Models: Structural Results and Algorithmic Consequences, A Permutation-based Model for Crowd Labeling: Optimal Estimation and Robustness, On kernel methods for covariates that are rankings, Feeling the Bern: Adaptive Estimators for Bernoulli Probabilities of Pairwise Comparisons, Asymptotic behavior of $\\ell_p$-based Laplacian regularization in semi-supervised learning, Fast low-rank estimation by projected gradient descent: General statistical and algorithmic guarantees, On the Computational Complexity of High-Dimensional Bayesian Variable Selection, Newton Sketch: A Linear-time Optimization Algorithm with Linear-Quadratic Convergence, Estimation from Pairwise Comparisons: Sharp Minimax Bounds with Topology Dependence, Statistical guarantees for the EM algorithm: From population to sample-based analysis, Discussion: Latent variable graphical model selection via convex optimization, Stochastic optimization and sparse statistical recovery: An optimal algorithm for high dimensions, Communication-Efficient Distributed Statistical Inference",
+    "has_data": true
+  },
+  "What other papers in category cs.AI have been written by the authors of Hierarchical Compound Poisson Factorization?": {
+    "strategy": "relation_filter",
+    "paper_id": "1604.03853",
+    "ground_truth": "Dynamic Collaborative Filtering with Compound Poisson Factorization",
+    "has_data": true
+  },
+  "What other papers in category cs.AI are written by the authors of Column-Oriented Datalog Materialization for Large Knowledge Graphs?": {
+    "strategy": "relation_filter",
+    "paper_id": "1511.08915",
+    "ground_truth": "Acyclicity Notions for Existential Rules and Their Application to Query Answering in Ontologies, A Description Logic Primer, KOGNAC: Efficient Encoding of Large Knowledge Graphs",
+    "has_data": true
+  },
+  "What other papers in category cs.CV are written by the authors of An implementation of the relational k-means algorithm?": {
+    "strategy": "relation_filter",
+    "paper_id": "1304.6899",
+    "ground_truth": "Generalizing k-means for an arbitrary distance matrix",
+    "has_data": true
+  },
+  "What other papers in category cs.LG are written by the authors of 'A New Approach in Persian Handwritten Letters Recognition Using Error Correcting Output Coding'?": {
+    "strategy": "relation_filter",
+    "paper_id": "1604.07554",
+    "ground_truth": "Evaluating the effect of topic consideration in identifying communities of rating-based social networks, Weighted Spectral Cluster Ensemble",
+    "has_data": true
+  },
+  "What other papers in category cs.LG are written by authors of the paper Sleep Analytics and Online Selective Anomaly Detection?": {
+    "strategy": "relation_filter",
+    "paper_id": "1403.0156",
+    "ground_truth": "Parameter Database : Data-centric Synchronization for Scalable Machine Learning, Classification of Passes in Football Matches using Spatiotemporal Data, Integer Programming Relaxations for Integrated Clustering and Outlier Detection, Network Traffic Decomposition for Anomaly Detection, Feature Graph Architectures",
+    "has_data": true
+  },
+  "What other papers in category cs.LG are written by the authors of Quantum Annealing for Clustering?": {
+    "strategy": "relation_filter",
+    "paper_id": "1408.2035",
+    "ground_truth": "Quantum Annealing for Variational Bayes Inference",
+    "has_data": true
+  },
+  "Which researchers that have co-authored papers with Xiao-Lei Zhang have also published work in the cs.LG category on topics related to Convex Discriminative Multitask Clustering?": {
+    "strategy": "multi_hop",
+    "paper_id": "1303.2130",
+    "ground_truth": "Ji Wu",
+    "has_data": true
+  },
+  "Which researchers that have co-authored papers with the authors of 'Large-Margin Metric Learning for Partitioning Problems' have also published research in the category stat.ML?": {
+    "strategy": "multi_hop",
+    "paper_id": "1303.1280",
+    "ground_truth": "Sylvain Arlot (LIENS), R\\'emi Lajugie (LIENS), Francis Bach (LIENS)",
+    "has_data": true
+  },
+  "Which co-authors of the paper 'Pushing Your Point of View: Behavioral Measures of Manipulation in Wikipedia' have also published papers in the category cs.LG?": {
+    "strategy": "multi_hop",
+    "paper_id": "1111.2092",
+    "ground_truth": "Allen Lavoie, Sanmay Das, Mithun Chakraborty, Malik Magdon-Ismail",
+    "has_data": true
+  },
+  "Which other researchers that have published in the cs.AI category have also co-authored papers with R. I. Brafman, one of the authors of the paper Learning to Coordinate Efficiently: A Model-based Approach?": {
+    "strategy": "multi_hop",
+    "paper_id": "1106.5258",
+    "ground_truth": "D. Monderer, R. I. Brafman, S. E. Shimony, C. Domshlak, D. Poole, H. H. Hoos, C. Boutilier, M. Tennenholtz",
+    "has_data": true
+  },
+  "Which researchers who have co-authored papers with Wolfgang Schreiner have also published in the category cs.AI?": {
+    "strategy": "multi_hop",
+    "paper_id": "1207.2291",
+    "ground_truth": "Muhammad Taimoor Khan",
+    "has_data": true
+  },
+  "Which researchers that have co-authored papers with Daniil Ryabko have also published research in the stat.ML category?": {
+    "strategy": "multi_hop",
+    "paper_id": "1005.0826",
+    "ground_truth": "Ronald Ortner, R\\'emi Munos, J\\'er\\'emie Mary, Peter Auer",
+    "has_data": true
+  },
+  "Which researchers who have co-authored papers with the authors of 'Learning Nonparametric Forest Graphical Models with Prior Information' have also published work in the category stat.ML?": {
+    "strategy": "multi_hop",
+    "paper_id": "1511.03796",
+    "ground_truth": "Yuancheng Zhu, Zhe Liu and Siqi Sun",
+    "has_data": true
+  },
+  "Which other authors who have published in the stat.ML category have also co-authored papers with the authors of Quantum Annealing for Variational Bayes Inference?": {
+    "strategy": "multi_hop",
+    "paper_id": "1408.2037",
+    "ground_truth": "Hiroshi Nakagawa, Shu Tanaka, Kenichi Kurihara, Issei Sato, Junya Honda, Junpei Komiyama, Hisashi Kashima, Seiji Miyashita, Naonori Ueda, Katsuhiko Ishiguro",
+    "has_data": true
+  },
+  "Which papers in category cs.LG have been co-authored by researchers who have also published papers with Mohamed Attia, an author of the paper 'Information Theoretic Limits of Data Shuffling for Distributed Learning'?": {
+    "strategy": "multi_hop",
+    "paper_id": "1609.05181",
+    "ground_truth": "Mohamed Attia, Naren Ramakrishnan, Pejman Khadivi, Ravi Tandon",
+    "has_data": true
+  },
+  "Which researchers that have co-authored papers with Emma Brunskill have also published works in the category cs.AI?": {
+    "strategy": "multi_hop",
+    "paper_id": "1605.08062",
+    "ground_truth": "Shayan Doroudi, Zhaohan Daniel Guo, Christoph Dann, Nicholas Roy, Ruijie He, Lihong Li, Michael L. Littman, Stuart Russell, Mohammad Gheshlaghi Azar",
+    "has_data": true
+  }
+}

@@ -88,6 +88,12 @@ class Dispatcher:
         # 2. Dispatch to the right backend
         if strategy in self._kg_methods:
             result = await self._kg_methods[strategy](query)
+            if len(result.results) == 0:
+                logger.info(
+                    "KG returned 0 results for strategy=%s, falling back to RAG hybrid",
+                    strategy,
+                )
+                result = await self._rag.hybrid(query, top_k)
         elif strategy in self._rag_methods:
             result = await self._rag_methods[strategy](query, top_k)
         else:

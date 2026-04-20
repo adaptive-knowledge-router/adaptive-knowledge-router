@@ -26,12 +26,20 @@ DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b")
 # Regex fallback for paper title extraction when LLM fails
 # Titles always follow "the paper" in our query templates
 _TITLE_PATTERNS = [
-    # "who are the authors of TITLE?" / "who wrote TITLE?" — extract title, NOT author
+    # "who are the authors of TITLE?" / "who wrote TITLE?" / "give me the authors of TITLE?"
     re.compile(
-        r"(?:who\s+(?:are|were)\s+the\s+authors?\s+of\s+(?:(?:the\s+)?paper\s+)?)(.+?)\??$",
+        r"(?:who\s+(?:are|were)\s+the\s+authors?\s+of\s+(?:(?:the\s+)?paper\s+)?(?:titled\s+)?)(.+?)\??$",
         re.IGNORECASE,
     ),
-    re.compile(r"(?:who\s+wrote|list\s+the\s+authors?\s+of)\s+(?:(?:the\s+)?paper\s+)?(.+?)\??$", re.IGNORECASE),
+    re.compile(r"(?:who\s+(?:wrote|authored)|list\s+the\s+authors?\s+of|who\s+is\s+the\s+(?:writer|author)\s+of)\s+(?:(?:the\s+)?paper\s+)?(?:titled\s+)?(.+?)\??$", re.IGNORECASE),
+    re.compile(
+        r"(?:give|show|tell|find)\s+me\s+the\s+authors?\s+of\s+(?:(?:the\s+)?paper\s+)?(?:titled\s+)?(.+?)\??$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"what\s+are\s+the\s+authors?\s+of\s+(?:(?:the\s+)?paper\s+)?(?:titled\s+)?(.+?)\??$",
+        re.IGNORECASE,
+    ),
     # "titled X" / "paper is titled X" / "which paper is titled X?"
     re.compile(r"\btitled\s+['\"]?(.+?)['\"]?\s*\??$", re.IGNORECASE),
     # "of/for/about the paper TITLE" — title ends at ?, end, or transition words
@@ -52,6 +60,13 @@ _TITLE_PATTERNS = [
     ),
     # "the TITLE paper" — title comes before the word "paper"
     re.compile(r"\bthe\s+(.+?)\s+paper\b", re.IGNORECASE),
+    # "same author as TITLE" / "same authors as TITLE"
+    re.compile(r"same\s+authors?\s+as\s+(.+?)(?:\?|$)", re.IGNORECASE),
+    # "by the authors of TITLE" / "authors of TITLE" at end of query
+    re.compile(
+        r"(?:by\s+the\s+authors?\s+of|authors?\s+of)\s+['\"]?(.+?)['\"]?\??$",
+        re.IGNORECASE,
+    ),
 ]
 
 # Regex fallbacks for author name extraction when LLM fails
@@ -62,6 +77,8 @@ _AUTHOR_PATTERNS = [
     re.compile(r"(?:find|show|list)\s+papers?\s+by\s+(.+?)(?:\?|$)", re.IGNORECASE),
     re.compile(r"(?:who\s+is|find|show)\s+(.+?)\s+(?:as\s+an?\s+author)", re.IGNORECASE),
     re.compile(r"co-authors?\s+of\s+(?!the\s+paper|paper\s)(.+?)(?:\?|$|who|that|\s+have|\s+also|\s+published)", re.IGNORECASE),
+    re.compile(r"co-authored\s+papers?\s+with\s+(.+?)(?:\s+in\s+(?:cs|stat|math|eess|q-bio)\b|\s+have|\s+also|\s+who|\s+that|\?|$)", re.IGNORECASE),
+    re.compile(r"co-authored\s+by\s+(.+?)(?:\s+in\s+(?:cs|stat|math|eess|q-bio)\b|\s+have|\s+also|\s+who|\s+that|\?|$)", re.IGNORECASE),
     re.compile(r"authors?\s+related\s+to\s+(.+?)(?:\?|$)", re.IGNORECASE),
     re.compile(r"(?:what\s+categories|which\s+categories|what\s+fields?|which\s+fields?)\s+(?:has|have|did)\s+(.+?)\s+(?:published?|written?|work)", re.IGNORECASE),
     re.compile(r"same\s+categor\w*\s+as\s+(.+?)(?:\?|$)", re.IGNORECASE),
@@ -75,7 +92,7 @@ _CATEGORY_PATTERN = re.compile(
 
 # Phrases that look like author names but aren't — LLM hallucinations.
 _BOGUS_AUTHOR_RE = re.compile(
-    r"^(?:the\s+)?(?:authors?\s+of|co-authors?\s+of|written\s+by|all\s+authors?)$",
+    r"^(?:the\s+)?(?:authors?\s+of|co-authors?\s+of|written\s+by|all\s+authors?)(\s+.+)?$",
     re.IGNORECASE,
 )
 
@@ -141,12 +158,21 @@ Query: "{query}"
 """
 
 PROMPT_RELATION_FILTER = """You are an entity extractor for an academic paper search system.
-Extract named entities from the query and return JSON only. No explanation.
+Extract named entities and the relation mode from the query. Return JSON only. No explanation.
 
 Fields:
 - title: paper title if a specific paper is named, else null
 - author_name: person's full name if mentioned, else null
 - category_name: map any field/area mention to one of: cs.AI, cs.LG, cs.CL, cs.CV, cs.NE, cs.IR, cs.RO, stat.ML — else null
+- mode: pick the best relation mode from the list below, else null
+
+Valid modes:
+  author_to_papers           — START from author, find their papers
+  category_to_papers         — START from category, find papers in it
+  paper_to_authors           — START from paper, find its authors
+  paper_to_categories        — START from paper, find its categories
+  paper_to_papers_in_category — papers by the same authors as a given paper, filtered to a category
+  papers_in_categories       — papers that appear in multiple categories
 
 Rules:
 - Extract the author name even if it appears mid-sentence (e.g. "papers by X", "written by X", "authored by X")
@@ -155,82 +181,93 @@ Rules:
 
 Examples:
 Query: "What papers has Yann LeCun written?"
-{{"title": null, "author_name": "Yann LeCun", "category_name": null}}
+{{"title": null, "author_name": "Yann LeCun", "category_name": null, "mode": "author_to_papers"}}
 
 Query: "What papers are in category cs.AI?"
-{{"title": null, "author_name": null, "category_name": "cs.AI"}}
+{{"title": null, "author_name": null, "category_name": "cs.AI", "mode": "category_to_papers"}}
 
 Query: "What categories is the paper Fast Private Data Release Algorithms published in?"
-{{"title": "Fast Private Data Release Algorithms", "author_name": null, "category_name": null}}
+{{"title": "Fast Private Data Release Algorithms", "author_name": null, "category_name": null, "mode": "paper_to_categories"}}
 
 Query: "Who are the authors of the paper BERT: Pre-training of Deep Bidirectional Transformers?"
-{{"title": "BERT: Pre-training of Deep Bidirectional Transformers", "author_name": null, "category_name": null}}
+{{"title": "BERT: Pre-training of Deep Bidirectional Transformers", "author_name": null, "category_name": null, "mode": "paper_to_authors"}}
 
 Query: "What papers in machine learning are written by Ilya Sutskever?"
-{{"title": null, "author_name": "Ilya Sutskever", "category_name": "cs.LG"}}
+{{"title": null, "author_name": "Ilya Sutskever", "category_name": "cs.LG", "mode": "author_to_papers"}}
 
 Query: "List papers by Andrew Ng in computer vision"
-{{"title": null, "author_name": "Andrew Ng", "category_name": "cs.CV"}}
+{{"title": null, "author_name": "Andrew Ng", "category_name": "cs.CV", "mode": "author_to_papers"}}
 
-Query: "Show papers by Yoshua Bengio in cs.LG"
-{{"title": null, "author_name": "Yoshua Bengio", "category_name": "cs.LG"}}
+Query: "What other papers in category cs.LG are written by the authors of Generative Adversarial Networks?"
+{{"title": "Generative Adversarial Networks", "author_name": null, "category_name": "cs.LG", "mode": "paper_to_papers_in_category"}}
+
+Query: "What other papers in category cs.AI are written by the authors of 'Dropout: A Simple Way to Prevent Overfitting'?"
+{{"title": "Dropout: A Simple Way to Prevent Overfitting", "author_name": null, "category_name": "cs.AI", "mode": "paper_to_papers_in_category"}}
+
+Query: "What other papers in category cs.CV have been written by authors of Deep Residual Learning for Image Recognition?"
+{{"title": "Deep Residual Learning for Image Recognition", "author_name": null, "category_name": "cs.CV", "mode": "paper_to_papers_in_category"}}
+
+Query: "Which papers in category stat.ML are by the same authors as Variational Autoencoders?"
+{{"title": "Variational Autoencoders", "author_name": null, "category_name": "stat.ML", "mode": "paper_to_papers_in_category"}}
 
 Query: "{query}"
 """
 
 PROMPT_MULTI_HOP = """You are an entity extractor for an academic paper search system.
-Extract named entities from the query and return JSON only. No explanation.
+Extract named entities and the traversal mode from the query. Return JSON only. No explanation.
 
 Fields:
 - title: paper title if a specific paper is named, else null
 - author_name: ANY person's name that appears in the query — regardless of where it appears, else null
 - category_name: extract the exact arxiv category code if present (e.g. cs.LG, stat.ML), else null
+- mode: pick the best traversal mode from the list below, else null
+
+Valid modes:
+  author_to_categories                          — what categories has author X published in?
+  category_to_authors                           — which authors publish in category X?
+  paper_to_other_papers_by_same_authors         — other papers by the same authors as paper X
+  author_to_same_category_papers                — papers in the same categories as author X
+  category_to_papers_by_authors                 — papers written by authors who publish in category X
+  paper_to_authors_in_same_categories           — authors who share categories with paper X
+  co_authors_in_category                        — co-authors of author X who also publish in category Y
+  paper_to_co_authors_in_category               — co-authors of paper X's authors who publish in category Y
+  author_to_related_authors_via_shared_categories — researchers related to author X via shared categories (use when asking about co-authors of X with no category filter)
+  category_to_related_categories_via_authors    — categories related to category X via shared authors
+  paper_to_related_papers_via_authors_and_categories — papers related to paper X via authors and categories
 
 Rules:
-- ALWAYS extract a person's name even if it appears after words like "as", "of", "related to", "similar to", "same categories as"
-  Example: "same categories as Geoffrey Hinton" → author_name = "Geoffrey Hinton"
-  Example: "related to Yoshua Bengio via" → author_name = "Yoshua Bengio"
-- If both an author name AND a category code appear in the query, extract BOTH — never drop one
-- Category codes appear verbatim in the query (e.g. "cs.LG", "stat.ML") — copy them exactly
-- CRITICAL: If the query mentions the word "categories" but does NOT contain a specific category code (like cs.LG), set category_name to null. Do NOT invent or guess a category.
-  Example: "What categories has Geoffrey Hinton published in?" → category_name: null (the query asks WHICH categories, it does not specify one)
-- If only a natural language field is mentioned (e.g. "machine learning"), map it: ml/machine learning → cs.LG, vision → cs.CV, NLP → cs.CL
-
-Valid categories: cs.AI, cs.LG, cs.CL, cs.CV, cs.NE, cs.IR, cs.RO, stat.ML
+- ALWAYS extract a person's name even if it appears after words like "as", "of", "related to", "co-authored with"
+- If both an author name AND a category code appear, extract BOTH
+- Category codes appear verbatim (e.g. "cs.LG") — copy exactly; if asking WHICH categories (not specifying one), set null
+- Use author_to_related_authors_via_shared_categories when query asks for co-authors/researchers who worked with X and no category is specified
 
 Examples:
-Query: "Which co-authors of Yann LeCun have also published in cs.CV?"
-{{"title": null, "author_name": "Yann LeCun", "category_name": "cs.CV"}}
-
-Query: "Which co-authors of Attention is All You Need also published in cs.LG?"
-{{"title": "Attention is All You Need", "author_name": null, "category_name": "cs.LG"}}
-
 Query: "What categories has Geoffrey Hinton published in?"
-{{"title": null, "author_name": "Geoffrey Hinton", "category_name": null}}
+{{"title": null, "author_name": "Geoffrey Hinton", "category_name": null, "mode": "author_to_categories"}}
 
-Query: "What categories has Yoshua Bengio published in?"
-{{"title": null, "author_name": "Yoshua Bengio", "category_name": null}}
+Query: "Which co-authors of Yann LeCun have also published in cs.CV?"
+{{"title": null, "author_name": "Yann LeCun", "category_name": "cs.CV", "mode": "co_authors_in_category"}}
+
+Query: "Which other researchers have co-authored papers with Dmitry Krotov?"
+{{"title": null, "author_name": "Dmitry Krotov", "category_name": null, "mode": "author_to_related_authors_via_shared_categories"}}
+
+Query: "Which other papers did the authors of Generative Adversarial Networks write?"
+{{"title": "Generative Adversarial Networks", "author_name": null, "category_name": null, "mode": "paper_to_other_papers_by_same_authors"}}
+
+Query: "Which other journals have published papers by co-authors of Funnel Transformer?"
+{{"title": "Funnel Transformer", "author_name": null, "category_name": null, "mode": "paper_to_other_papers_by_same_authors"}}
 
 Query: "Which authors in cs.AI have also published in stat.ML?"
-{{"title": null, "author_name": null, "category_name": "cs.AI"}}
-
-Query: "What other papers did the authors of Generative Adversarial Networks write?"
-{{"title": "Generative Adversarial Networks", "author_name": null, "category_name": null}}
-
-Query: "Which other papers in category cs.AI have been co-authored by the authors of the Dropout: A Simple Way to Prevent Neural Networks from Overfitting paper?"
-{{"title": "Dropout: A Simple Way to Prevent Neural Networks from Overfitting", "author_name": null, "category_name": "cs.AI"}}
-
-Query: "Which other papers have been written by the authors of the Deep Residual Learning for Image Recognition paper?"
-{{"title": "Deep Residual Learning for Image Recognition", "author_name": null, "category_name": null}}
+{{"title": null, "author_name": null, "category_name": "cs.AI", "mode": "category_to_authors"}}
 
 Query: "What papers are in the same categories as Yoshua Bengio?"
-{{"title": null, "author_name": "Yoshua Bengio", "category_name": null}}
+{{"title": null, "author_name": "Yoshua Bengio", "category_name": null, "mode": "author_to_same_category_papers"}}
 
 Query: "Which authors are related to Andrew Ng via shared categories?"
-{{"title": null, "author_name": "Andrew Ng", "category_name": null}}
+{{"title": null, "author_name": "Andrew Ng", "category_name": null, "mode": "author_to_related_authors_via_shared_categories"}}
 
 Query: "Which co-authors of Yoshua Bengio have also worked in stat.ML?"
-{{"title": null, "author_name": "Yoshua Bengio", "category_name": "stat.ML"}}
+{{"title": null, "author_name": "Yoshua Bengio", "category_name": "stat.ML", "mode": "co_authors_in_category"}}
 
 Query: "{query}"
 """
@@ -291,7 +328,8 @@ VALID_MODES = {
     "paper_to_categories", "category_to_papers", "author_to_categories",
     "category_to_authors", "paper_to_other_papers_by_same_authors",
     "author_to_same_category_papers", "category_to_papers_by_authors",
-    "paper_to_authors_in_same_categories",
+    "paper_to_authors_in_same_categories", "co_authors_in_category",
+    "paper_to_co_authors_in_category", "paper_to_papers_in_category",
     "author_to_related_authors_via_shared_categories",
     "category_to_related_categories_via_authors",
     "paper_to_related_papers_via_authors_and_categories",
@@ -408,7 +446,7 @@ def extract_title_regex(query: str) -> str | None:
     for pattern in _TITLE_PATTERNS:
         m = pattern.search(query)
         if m:
-            title = m.group(1).strip().rstrip("?.,")
+            title = m.group(1).strip().rstrip("?.,").strip("'\"")
             # Reject if the "title" is actually a paper ID (e.g. 0704.0001)
             if PAPER_ID_PATTERN.fullmatch(title):
                 continue
@@ -421,44 +459,47 @@ def extract_title_regex(query: str) -> str | None:
 
 
 def extract_all(query: str, strategy: str | None = None) -> dict[str, Any]:
-    # ── deterministic parsing first ──────────────────────────────────
     paper_id = extract_paper_id(query)
-    det_title = extract_title_regex(query)
-    det_author = extract_author_name_regex(query)
-    det_category = extract_category_regex(query)
 
-    # If deterministic parsing found a title, skip the LLM entirely
-    # (avoids cold-start latency and hallucination).
-    if det_title or paper_id:
+    # entity_lookup: regex is reliable — skip LLM to avoid latency
+    if strategy == "entity_lookup":
+        det_title    = extract_title_regex(query)
+        det_author   = extract_author_name_regex(query)
+        det_category = extract_category_regex(query)
         return {
-            "paper_id"        : paper_id,
-            "title"           : det_title,
-            "doi"             : extract_doi(query),
-            "author_name"     : det_author,
-            "category_name"   : det_category,
-            "category_names"  : [det_category] if det_category else None,
-            "journal_ref"     : None,
-            "submitter"       : None,
+            "paper_id"         : paper_id,
+            "title"            : det_title,
+            "doi"              : extract_doi(query),
+            "author_name"      : det_author,
+            "category_name"    : det_category,
+            "category_names"   : [det_category] if det_category else None,
+            "journal_ref"      : None,
+            "submitter"        : None,
             "comments_contains": None,
-            "logic"           : extract_logic(query),
-            "has_doi"         : extract_has_doi(query),
-            "has_journal_ref" : extract_has_journal_ref(query),
-            "hops"            : extract_hops(query),
-            "mode"            : None,
-            "is_count_query"  : is_count_query(query),
+            "logic"            : extract_logic(query),
+            "has_doi"          : extract_has_doi(query),
+            "has_journal_ref"  : extract_has_journal_ref(query),
+            "hops"             : extract_hops(query),
+            "mode"             : None,
+            "is_count_query"   : is_count_query(query),
         }
 
-    # ── LLM extraction (fallback) ───────────────────────────────────
-    llm = _call_ollama(query, strategy=strategy)
+    # relation_filter / multi_hop: regex first, LLM only when regex finds nothing
+    author_name   = extract_author_name_regex(query)
+    title         = extract_title_regex(query)
+    category_name = extract_category_regex(query)
 
-    # Reject bogus author names the LLM may hallucinate.
-    llm_author = llm["author_name"]
-    if llm_author and _BOGUS_AUTHOR_RE.match(llm_author.strip()):
-        llm_author = None
-
-    author_name = llm_author or det_author
-    title = llm["title"] or det_title
-    category_name = llm["category_name"] or det_category
+    if not any([author_name, title, category_name]):
+        llm = _call_ollama(query, strategy=strategy)
+        llm_author = llm["author_name"]
+        if llm_author and _BOGUS_AUTHOR_RE.match(llm_author.strip()):
+            llm_author = None
+        author_name   = llm_author           or author_name
+        title         = llm["title"]         or title
+        category_name = llm["category_name"] or category_name
+        llm_mode      = llm["mode"]
+    else:
+        llm_mode = None
 
     return {
         "paper_id"        : paper_id,
@@ -474,6 +515,6 @@ def extract_all(query: str, strategy: str | None = None) -> dict[str, Any]:
         "has_doi"         : extract_has_doi(query),
         "has_journal_ref" : extract_has_journal_ref(query),
         "hops"            : extract_hops(query),
-        "mode"            : llm["mode"],
+        "mode"            : llm_mode,
         "is_count_query"  : is_count_query(query),
     }

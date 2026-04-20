@@ -613,6 +613,55 @@ WHERE p1.paper_id <> p2.paper_id
 RETURN count(DISTINCT p3) AS total_count
 """
 
+RELATION_FILTER_PAPER_TO_PAPERS_IN_CATEGORY = """
+MATCH (p1:Paper {paper_id: $paper_id})<-[:WROTE]-(a:Author)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+  AND p1.paper_id <> p2.paper_id
+OPTIONAL MATCH (a2:Author)-[:WROTE]->(p2)
+OPTIONAL MATCH (p2)-[:IN_CATEGORY]->(c2:Category)
+RETURN DISTINCT p2.paper_id AS paper_id,
+       p2.title AS title,
+       substring(p2.abstract, 0, 300) AS abstract,
+       p2.comments AS comments,
+       p2.journal_ref AS journal_ref,
+       p2.doi AS doi,
+       p2.submitter AS submitter,
+       p2.report_no AS report_no,
+       p2.license AS license,
+       p2.update_date AS update_date,
+       p2.version_count AS version_count,
+       p2.categories_raw AS categories_raw,
+       collect(DISTINCT a2.author_name) AS authors,
+       collect(DISTINCT c2.category_name) AS categories
+LIMIT 20
+"""
+
+RELATION_FILTER_PAPER_TO_PAPERS_IN_CATEGORY_COUNT = """
+MATCH (p1:Paper {paper_id: $paper_id})<-[:WROTE]-(a:Author)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+  AND p1.paper_id <> p2.paper_id
+RETURN count(DISTINCT p2) AS total_count
+"""
+
+MULTI_HOP_3_PAPER_TO_CO_AUTHORS_IN_CATEGORY = """
+MATCH (p1:Paper {paper_id: $paper_id})<-[:WROTE]-(a1:Author)
+MATCH (a1)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+WHERE a1.author_name <> a2.author_name
+MATCH (a2)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+RETURN DISTINCT a2.author_name AS co_author
+LIMIT 20
+"""
+
+MULTI_HOP_3_PAPER_TO_CO_AUTHORS_IN_CATEGORY_COUNT = """
+MATCH (p1:Paper {paper_id: $paper_id})<-[:WROTE]-(a1:Author)
+MATCH (a1)-[:WROTE]->(p:Paper)<-[:WROTE]-(a2:Author)
+WHERE a1.author_name <> a2.author_name
+MATCH (a2)-[:WROTE]->(p2:Paper)-[:IN_CATEGORY]->(c:Category)
+WHERE toLower(c.category_name) CONTAINS toLower($category_name)
+RETURN count(DISTINCT a2) AS total_count
+"""
+
 PATH_EXPLAIN_AUTHOR_TO_AUTHOR_VIA_CATEGORY = """
 MATCH (a1:Author)
 WHERE toLower(a1.author_name) CONTAINS toLower($author1)

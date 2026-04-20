@@ -197,26 +197,6 @@ Each LLM response was validated in `call_llama()`:
 | 5     | 0.1656    | 0.3274   | 88.42%       |
 | 6     | 0.1314    | 0.2606   | 91.42%       |
 
----
-
-
-## Inference Performance (held-out test, unseen papers)
-
-| Strategy | Score |
-|---|---|
-| entity_lookup | 5/5 ✓ |
-| relation_filter | 5/5 ✓ |
-| multi_hop | 4/5 |
-| sparse | 3/5 |
-| dense | 4/5 |
-| hybrid | 0/5 |
-| **Overall** | **21/30 (70%)** |
-
-KG strategies (entity_lookup, relation_filter, multi_hop) perform near-perfectly.
-Hybrid is the weakest class — query text alone cannot reliably distinguish hybrid
-from dense or sparse without more distinctive training examples.
-
----
 
 ## Model Weights
 

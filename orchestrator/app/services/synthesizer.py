@@ -38,7 +38,7 @@ _MODE_EVIDENCE_FIELDS: dict[str, tuple[str, ...]] = {
     "paper_details":           ("title", "name", "authors", "doi", "categories", "abstract"),
     "paper_titles":            ("title", "name", "paper_id", "id", "authors"),
     "paper_titles_from_seed":  ("title", "name", "paper_id", "id", "authors"),
-    "author_names":            ("author_name", "authors", "name"),
+    "author_names":            ("co_author", "author_name", "authors", "name"),
     "category_names":          ("category_name", "categories", "category"),
 }
 
@@ -72,9 +72,11 @@ _PAPER_LIST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _AUTHOR_LIST_PATTERN = re.compile(
-    r"which authors|who are the authors|list authors|what authors"
+    r"which authors|who (?:are|is|were|was) the authors?|list authors|what authors"
     r"|who (?:wrote|authored|has written|have written)"
-    r"|authors of ",
+    r"|authors? of "
+    r"|which researchers|which scientists|which scholars"
+    r"|researchers (?:who|that|which)|scientists (?:who|that|which)",
     re.IGNORECASE,
 )
 _CATEGORY_LIST_PATTERN = re.compile(
@@ -218,7 +220,7 @@ def _direct_paper_details(results: list[dict]) -> str | None:
 
 def _direct_author_list(results: list[dict]) -> str | None:
     """Return a deduplicated bullet list of author names, filtering garbage."""
-    items = _collect_field(results, "author_name", "authors", "name")
+    items = _collect_field(results, "co_author", "author_name", "authors", "name")
     # Expand comma-separated author strings and filter
     expanded: list[str] = []
     seen: set[str] = set()

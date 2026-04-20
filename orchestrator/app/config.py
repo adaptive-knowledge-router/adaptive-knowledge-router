@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # ── Ollama LLM (answer synthesis) ──────────────────────────────────
     ollama_url: str = "http://ollama:11434"
     answer_model: str = "qwen2.5:1.5b"
-    ollama_timeout: float = 60.0
+    ollama_timeout: float = 240.0
 
     # ── HTTP client settings ──────────────────────────────────────────
     # Timeout (seconds) for each outbound request to a downstream service.
