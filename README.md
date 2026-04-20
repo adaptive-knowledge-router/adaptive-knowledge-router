@@ -193,7 +193,7 @@ curl -X POST http://localhost:8003/query \
 |---|---|---|
 | Ollama model pull (qwen2.5:3b) | ~1 min download | Skipped (volume) |
 | Ollama model pull (qwen2.5:1.5b) | ~1 min download | Skipped (volume) |
-| Neo4j data load (~20k papers) | ~2 min | Skipped (volume) |
+| Neo4j data load (~20k papers) | ~40 min | Skipped (volume) |
 | FAISS index build | ~45–60 min (CPU) | Skipped (volume) |
 | HuggingFace model download | ~1 min | Cached in image |
 
