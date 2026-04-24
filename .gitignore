@@ -20,12 +20,22 @@ rag-service/indexes/
 
 !kg-service/data/processed/arxiv_subset.jsonl
 !router-service/arxiv_queries.jsonl
-!router-service/labeled_processed_ids.json
 !router-service/baseline_queries.jsonl
 !router-service/baseline_processed_ids.json
+!router-service/filtered_queries.jsonl
+!router-service/processed_ids.json
+!eval/kg_ground_truths.json
+
+
+!router-service/router_model/
+!router-service/router_model/**
+router-service/router_model/training_args.bin
 
 router-service/label_queries.py
 
+
+eval/retrieval_results.json
+eval/retrieval_summary.json
 
 notes.MD
 .DS_Store

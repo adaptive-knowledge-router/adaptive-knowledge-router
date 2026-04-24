@@ -18,11 +18,11 @@ dense_retriever = DenseRetriever(
 )
 
 hybrid_retriever = HybridRetriever(
+    bm25_retriever=bm25_retriever,
+    dense_retriever=dense_retriever,
     bm25_top_k=10,
     dense_top_k=10,
-    dense_model_name="BAAI/bge-small-en-v1.5",
     reranker_model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
-    max_docs=None
 )
 
 
@@ -38,6 +38,24 @@ def root():
             "/rag/hybrid"
         ]
     }
+
+
+@app.get("/health")
+def health():
+    bm25_ready = (
+        bm25_retriever is not None
+        and hasattr(bm25_retriever, "documents")
+        and len(bm25_retriever.documents) > 0
+    )
+    dense_ready = dense_retriever is not None and dense_retriever.index is not None
+    hybrid_ready = hybrid_retriever is not None
+    checks = {
+        "bm25_ready": bm25_ready,
+        "dense_ready": dense_ready,
+        "hybrid_ready": hybrid_ready,
+    }
+    all_ready = all(checks.values())
+    return {"status": "ok" if all_ready else "loading", **checks}
 
 
 @app.get("/rag/sparse")

@@ -118,6 +118,7 @@ VALID_MULTIHOP_MODES = {
     "category_to_papers_by_authors",
     "paper_to_authors_in_same_categories",
     "co_authors_in_category",
+    "paper_to_co_authors_in_category",
     "author_to_related_authors_via_shared_categories",
     "category_to_related_categories_via_authors",
     "paper_to_related_papers_via_authors_and_categories",
@@ -416,12 +417,103 @@ def query_from_natural_language(
     return _route_question(question=question, count_only=count_only)
 
 
+import re as _re
+
+# Patterns that indicate the user wants authors OF a paper (relation traversal),
+# not an entity lookup.  Checked before defaulting to entity_lookup.
+_AUTHOR_OF_PAPER_RE = _re.compile(
+    r"(?:who\s+(?:are|were)\s+the\s+authors?\s+of|who\s+wrote|list\s+the\s+authors?\s+of|"
+    r"authors?\s+of\s+the\s+paper|authors?\s+of\s+paper)",
+    _re.IGNORECASE,
+)
+
+# Patterns indicating a paper-to-categories relation query
+_CATEGORIES_OF_PAPER_RE = _re.compile(
+    r"(?:categor\w+\s+(?:of|for)\s+(?:the\s+)?paper|"
+    r"what\s+categor\w+\s+(?:is|does)|which\s+categor\w+\s+(?:is|does)|"
+    r"(?:paper|it)\s+(?:belong|published\s+in|in\s+which\s+categor))",
+    _re.IGNORECASE,
+)
+
+# Patterns indicating an author-to-categories query (fields/categories an author publishes in)
+_AUTHOR_TO_CATEGORIES_RE = _re.compile(
+    r"(?:what|which)\s+(?:fields?|categor\w+)\s+(?:has|have|did|does)",
+    _re.IGNORECASE,
+)
+
+# Patterns indicating a multi-hop query (same author, related papers, etc.)
+_MULTI_HOP_RE = _re.compile(
+    r"(?:same\s+author\s+as|written\s+by\s+the\s+same\s+author|"
+    r"other\s+papers?\s+(?:by|did|have)\s+the\s+authors?\s+of|"
+    r"other\s+papers?\s+(?:written|authored)\s+by|"
+    r"what\s+other\s+papers|"
+    r"co-author\w*\s+of|"
+    r"co-authored\s+(?:papers?\s+)?with|"
+    r"researchers?\s+(?:who\s+)?(?:have\s+)?co-author\w*|"
+    r"related\s+papers?\s+via|"
+    r"papers?\s+by\s+same\s+author|"
+    r"authors?\s+in\s+same\s+categor)",
+    _re.IGNORECASE,
+)
+
+
 @app.get("/kg/query/entity")
 def query_entity_from_natural_language(
     question: str = Query(..., description="Natural-language question already routed to entity_lookup"),
     count_only: bool = False,
 ):
     extracted = extract_all(question, strategy="entity_lookup")
+    has_paper = bool(extracted["paper_id"] or extracted["title"])
+
+    # ── Reroute multi-hop queries that were forced here by paper-ID override ─
+    if has_paper and _MULTI_HOP_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # ── Reroute paper-to-authors questions to relation_filter ────────
+    if has_paper and _AUTHOR_OF_PAPER_RE.search(question):
+        result = relation_filter(
+            mode="paper_to_authors",
+            paper_id=extracted["paper_id"],
+            title=extracted["title"],
+            count_only=count_only,
+        )
+        result["router"] = {
+            "selected_endpoint": "relation_filter",
+            "selected_mode": "paper_to_authors",
+            "rerouted_from": "entity_lookup",
+            "question": question,
+            "prepared_params": {
+                "paper_id": extracted["paper_id"],
+                "title": extracted["title"],
+            },
+        }
+        return result
+
+    # ── Reroute paper-to-categories questions to relation_filter ─────
+    if has_paper and _CATEGORIES_OF_PAPER_RE.search(question):
+        result = relation_filter(
+            mode="paper_to_categories",
+            paper_id=extracted["paper_id"],
+            title=extracted["title"],
+            count_only=count_only,
+        )
+        result["router"] = {
+            "selected_endpoint": "relation_filter",
+            "selected_mode": "paper_to_categories",
+            "rerouted_from": "entity_lookup",
+            "question": question,
+            "prepared_params": {
+                "paper_id": extracted["paper_id"],
+                "title": extracted["title"],
+            },
+        }
+        return result
+
+    # ── Reroute author-to-categories questions to multi_hop ──────────
+    if not has_paper and extracted["author_name"] and _AUTHOR_TO_CATEGORIES_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # ── Default entity_lookup flow ───────────────────────────────────
     params = {
         "paper_id": extracted["paper_id"],
         "title": extracted["title"],
@@ -455,13 +547,28 @@ def query_relation_from_natural_language(
         "paper_to_authors",
         "paper_to_categories",
         "papers_in_categories",
+        "paper_to_papers_in_category",
     }:
         mode = None
 
     has_paper = bool(extracted["paper_id"] or extracted["title"])
 
     if mode is None:
-        if has_paper and (
+        # Check paper_to_papers_in_category FIRST — "by the authors of" / "co-authored by"
+        # must be caught before the generic "authored by" → author_to_papers path.
+        if has_paper and extracted["category_name"] and (
+            "papers in category" in lowered
+            or "other papers in" in lowered
+            or "papers in cs." in lowered
+            or "co-authored by the authors of" in lowered
+            or "co-authored by authors of" in lowered
+            or "written by the authors of" in lowered
+            or "written by authors of" in lowered
+            or "by the authors of" in lowered
+        ):
+            mode = "paper_to_papers_in_category"
+
+        elif has_paper and (
             "authors of paper" in lowered
             or "paper to authors" in lowered
             or "who wrote paper" in lowered
@@ -510,6 +617,32 @@ def query_relation_from_natural_language(
 
         elif extracted["category_names"] and len(extracted["category_names"]) >= 2:
             mode = "papers_in_categories"
+
+    # ── Reroute misclassified queries before giving up ────────────────
+
+    # author-to-categories is a multi-hop query, not relation_filter
+    if mode is None and extracted["author_name"] and _AUTHOR_TO_CATEGORIES_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # paper-to-authors detected via regex but missed by keyword matching above
+    if mode is None and has_paper and _AUTHOR_OF_PAPER_RE.search(question):
+        mode = "paper_to_authors"
+
+    # paper-to-categories detected via regex
+    if mode is None and has_paper and _CATEGORIES_OF_PAPER_RE.search(question):
+        mode = "paper_to_categories"
+
+    # multi-hop patterns misrouted here by the router model
+    if mode is None and _MULTI_HOP_RE.search(question):
+        return query_multihop_from_natural_language(question=question, count_only=count_only)
+
+    # title/paper_id with no relation intent → entity_lookup
+    if mode is None and has_paper:
+        return query_entity_from_natural_language(question=question, count_only=count_only)
+
+    # bare author/category name without relation intent → entity_lookup
+    if mode is None and (extracted["author_name"] or extracted["category_name"]):
+        return query_entity_from_natural_language(question=question, count_only=count_only)
 
     if mode is None:
         raise HTTPException(status_code=400, detail="Could not infer relation_filter mode from the question.")
@@ -575,12 +708,46 @@ def query_multihop_from_natural_language(
             mode = "category_to_authors"
             hops = 2
 
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "colleagues" in lowered
+            or "co-authored by colleagues" in lowered
+            or "colleagues of the authors" in lowered
+        ):
+            # Asks for PAPERS by colleagues in a category — delegate to relation_filter
+            return query_relation_from_natural_language(question=question, count_only=count_only)
+
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "co-authored by the authors of" in lowered
+            or "co-authored by authors of" in lowered
+            or "written by the authors of" in lowered
+            or "written by authors of" in lowered
+        ):
+            # Query asks for PAPERS in a category by the same authors as a given paper
+            return query_relation_from_natural_language(question=question, count_only=count_only)
+
+        elif (extracted["paper_id"] or extracted["title"]) and extracted["category_name"] and (
+            "co-author" in lowered
+            or "co author" in lowered
+        ):
+            mode = "paper_to_co_authors_in_category"
+            hops = 3
+
         elif extracted["author_name"] and extracted["category_name"] and (
             "co-author" in lowered
             or "co author" in lowered
         ):
             mode = "co_authors_in_category"
             hops = 3
+
+        elif extracted["author_name"] and (
+            "co-author" in lowered
+            or "co author" in lowered
+            or "co-authored" in lowered
+            or "collaborated with" in lowered
+        ):
+            # co-authors of author without a category constraint
+            mode = "author_to_related_authors_via_shared_categories"
+            hops = 4
 
         elif extracted["author_name"] and (
             "author to categories" in lowered
