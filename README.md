@@ -89,19 +89,19 @@ The LLM (qwen2.5:3b) receives strategy-specific few-shot prompts and returns str
 |---|---|
 | `entity_lookup` | Matches a Paper node by title (fuzzy) or Author node by name → returns metadata |
 | `relation_filter` | Traverses 1-hop relations: author→papers, paper→authors, paper→categories, category→papers, papers by same author filtered to a category |
-| `multi_hop` | 2–3 hop traversals: co-authors of X who publish in category Y, papers by co-authors of paper X in category Y, related authors via shared categories |
+| `multi_hop` | 2–4 hop traversals: co-authors of X who publish in category Y, papers by co-authors of paper X in category Y, related authors via shared categories |
 
 **Endpoints:** `GET /kg/query/entity`, `GET /kg/query/relation`, `GET /kg/query/multi_hop`
 
 ---
 
 ### RAG Service (`:8002`)
-Text retrieval over ~20k arXiv paper abstracts using three strategies:
+Text retrieval over ~20k arXiv papers (title, authors, categories, abstract) using three strategies:
 
 | Strategy | Method | Model |
 |---|---|---|
 | `sparse` | BM25 keyword search (rank-bm25) | — |
-| `dense` | Semantic vector search over FAISS index | `BAAI/bge-large-en` embeddings |
+| `dense` | Semantic vector search over FAISS index | `BAAI/bge-small-en-v1.5` embeddings |
 | `hybrid` | BM25 top-10 + dense top-10 → merge → cross-encoder rerank | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
 
 **Endpoints:** `GET /rag/sparse`, `GET /rag/dense`, `GET /rag/hybrid` (all accept `query` and `top_k`)
@@ -111,9 +111,38 @@ Text retrieval over ~20k arXiv paper abstracts using three strategies:
 ### Orchestrator (`:8003`)
 Coordinates the full pipeline: calls the router → dispatches to KG or RAG → synthesizes a natural language answer via **qwen2.5:1.5b** (Ollama).
 
-- Synthesis model is separate from KG entity extraction model
+**Dispatch behaviour:**
+- **Deterministic override:** queries containing a paper ID (e.g. `1706.03762`) or DOI are always routed to `entity_lookup`, regardless of router prediction
+- **Confidence threshold:** router confidence below `0.4` is treated as uncertain
+- **KG → RAG fallback:** if a KG strategy (`entity_lookup`, `relation_filter`, `multi_hop`) returns 0 results, the orchestrator automatically falls back to RAG `hybrid` retrieval
+- **Retry logic:** KG and RAG clients retry up to **2 times** on transient failures (502/503/504, connection errors, timeouts)
+
+**Answer synthesis:**
+- Synthesis model (`qwen2.5:1.5b`) is separate from KG entity extraction model (`qwen2.5:3b`)
+- Queries are classified into one of 5 modes before synthesis: `exact_lookup`, `list_query`, `open_explanation`, `compare_query`, `fallback`
+- **Fast path (no LLM):** KG strategies with `exact_lookup` or `list_query` modes extract answers directly from structured fields — no LLM call
+- **LLM path:** open-ended, comparison, and fallback modes build a compact evidence block and call `qwen2.5:1.5b`
+- **LRU cache:** synthesized answers are cached in-memory (128 entries) keyed by `(query, strategy, num_results)` — cache hits skip synthesis entirely
 - Raw `results` are always preserved in the response; synthesis is a post-retrieval step
 - If synthesis fails, `synthesized_answer` is `null` but raw results are still returned
+
+**Web UI:** available at `GET http://localhost:8003/` — a browser interface for submitting queries
+
+**Configuration:** all settings are overridable via `ORCH_*` environment variables or a `.env` file
+
+| Setting | Default | Env var |
+|---|---|---|
+| Router URL | `http://router-service:8001` | `ORCH_ROUTER_URL` |
+| KG URL | `http://kg-service:8000` | `ORCH_KG_URL` |
+| RAG URL | `http://rag-service:8002` | `ORCH_RAG_URL` |
+| Ollama URL | `http://ollama:11434` | `ORCH_OLLAMA_URL` |
+| Answer model | `qwen2.5:1.5b` | `ORCH_ANSWER_MODEL` |
+| Default top_k | `5` | `ORCH_DEFAULT_TOP_K` |
+| Max retries | `2` | `ORCH_MAX_RETRIES` |
+| Request timeout | `120s` | `ORCH_REQUEST_TIMEOUT` |
+| Ollama timeout | `240s` | `ORCH_OLLAMA_TIMEOUT` |
+| Confidence threshold | `0.4` | `ORCH_CONFIDENCE_THRESHOLD` |
+| Cache size | `128` | `ORCH_CACHE_SIZE` |
 
 ---
 
@@ -127,6 +156,16 @@ Coordinates the full pipeline: calls the router → dispatches to KG or RAG → 
 | `sparse` | RAG | Keyword-heavy factual questions about paper content |
 | `dense` | RAG | Semantic/conceptual questions about methods or contributions |
 | `hybrid` | RAG | Complex questions requiring both keyword and semantic matching |
+
+---
+
+## Design Decisions
+
+- **Separation of concerns:** Each service is an independent Docker container (KG, RAG, Router, Orchestrator) orchestrated via Docker Compose. Components can be developed, scaled, or replaced independently — e.g. swapping the router model or upgrading the RAG index without redeploying the full stack.
+- **Regex-first extraction:** For `relation_filter` and `multi_hop`, parameter extraction tries regex patterns first (author names, paper titles, category codes). `qwen2.5:3b` is called only when regex finds nothing, avoiding LLM latency on common query patterns.
+- **No LLM for `entity_lookup`:** Entity lookups use regex exclusively — no LLM call at all — making this the lowest-latency KG path and fully deterministic.
+- **Smart re-routing inside KG service:** Each NL query endpoint (`/kg/query/entity`, `/kg/query/relation`, `/kg/query/multi_hop`) detects actual query intent at runtime and redirects to the correct handler. For example, the entity endpoint recognises "who wrote X?" patterns and re-routes to `relation_filter`; the relation endpoint detects multi-hop patterns and re-routes to multi-hop. This gracefully tolerates occasional router misclassifications.
+- **Dual LLM roles:** `qwen2.5:3b` handles KG parameter extraction (entity and mode extraction from natural language); `qwen2.5:1.5b` handles answer synthesis in the Orchestrator. These are separate Ollama models with separate prompts and timeout settings.
 
 ---
 
@@ -185,7 +224,7 @@ curl -X POST http://localhost:8003/query \
 | KG | `GET :8000/kg/health` | Verifies Neo4j connectivity |
 | RAG | `GET :8002/health` | `bm25_ready`, `dense_ready`, `hybrid_ready` fields |
 | Orchestrator | `GET :8003/health` | Process up |
-| Orchestrator | `GET :8003/readiness` | Pings all downstream services |
+| Orchestrator | `GET :8003/readiness` | Pings router, KG, RAG, and Ollama — returns `degraded` if any are unreachable |
 
 ### First-run vs subsequent starts
 
